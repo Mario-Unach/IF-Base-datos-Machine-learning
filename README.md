@@ -6,7 +6,7 @@
 
 <div align="center">
 
-# 🧠 Machine Learning 1 & Admin. Bases de Datos
+# 🧠 Machine Learning & Admin. Bases de Datos
 ## Proyecto de Investigación Formativa
 
 **DESARROLLO DE UN SISTEMA PREDICTIVO PARA EVALUAR LA PROBABILIDAD DE IMPAGO EN CLIENTES FINANCIEROS**
