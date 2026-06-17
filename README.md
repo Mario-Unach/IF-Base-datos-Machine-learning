@@ -90,7 +90,7 @@
 
 | 📦 Dataset Seleccionado | ⚙️ Tecnologías |
 | :--- | :--- |
-| ➡️ **Nombre:** Default of Credit Card Clients <br>➡️ **Fuente:** [UCIrvine](https://archive.ics.uci.edu/dataset/350/default+of+credit+card+clients) <br>➡️ **Registros:** 30000 <br>➡️ **Variables:** SEX, EDUCATION,	MARRIAGE,	AGE | 🗄️ **BD Relacional:** SQL Server 2012 <br>🍃 **BD NoSQL:** MongoDB <br>🐍 **Procesamiento y ML:** Python 3.10+, Jupyter, pandas, scikit-learn <br>📊 **Visualización:** Streamlit, matplotlib <br>🐙 **Control de versiones:** Git + GitHub |
+| ➡️ **Nombre:** Default of Credit Card Clients <br>➡️ **Fuente:** [UCIrvine](https://archive.ics.uci.edu/dataset/350/default+of+credit+card+clients) <br>➡️ **Registros:** 30000 <br>➡️ **Variables:** SEX, EDUCATION,	MARRIAGE,	AGE | 🗄️ **BD Relacional:** SQL Server 2022 <br>🍃 **BD NoSQL:** MongoDB <br>🐍 **Procesamiento y ML:** Python 3.12, Jupyter, pandas, scikit-learn <br>📊 **Visualización:** Streamlit, matplotlib <br>🐙 **Control de versiones:** Git + GitHub |
 
 
 
