@@ -18,7 +18,7 @@
 ![Status](https://img.shields.io/badge/status-en%20progreso-yellow?logo=progress)
 ![SQL Server](https://img.shields.io/badge/SQL%20Server-2022-red)
 ![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-brightgreen?logo=mongodb)
-![Python](https://img.shields.io/badge/Python-3.13-blue?logo=python)
+![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.28-red?logo=streamlit)
 
 </div>
