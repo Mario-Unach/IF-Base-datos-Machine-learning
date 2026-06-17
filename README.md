@@ -90,7 +90,7 @@
 
 | 📦 Dataset Seleccionado | ⚙️ Tecnologías |
 | :--- | :--- |
-| ➡️ **Nombre:** ________________________ <br>➡️ **Fuente:** __________________________ <br>➡️ **Registros:** _______________________ <br>➡️ **Variables:** __________________________ | 🗄️ **BD Relacional:** SQL Server 2012 <br>🍃 **BD NoSQL:** MongoDB <br>🐍 **Procesamiento y ML:** Python 3.10+, Jupyter, pandas, scikit-learn <br>📊 **Visualización:** Streamlit, matplotlib <br>🐙 **Control de versiones:** Git + GitHub |
+| ➡️ **Nombre:** Default of Credit Card Clients <br>➡️ **Fuente:** KAGGLE <br>➡️ **Registros:** 30000 <br>➡️ **Variables:** SEX, EDUCATION,	MARRIAGE,	AGE | 🗄️ **BD Relacional:** SQL Server 2012 <br>🍃 **BD NoSQL:** MongoDB <br>🐍 **Procesamiento y ML:** Python 3.10+, Jupyter, pandas, scikit-learn <br>📊 **Visualización:** Streamlit, matplotlib <br>🐙 **Control de versiones:** Git + GitHub |
 
 
 
