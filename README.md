@@ -100,6 +100,8 @@
 
 <div align="center">
 
+## 📐 Estructura de la Base de Datos Relacional (SQL Server)
+
 ![Diagrama entidad realacion](Documentos/Diagrama.png)
 
 </div>
