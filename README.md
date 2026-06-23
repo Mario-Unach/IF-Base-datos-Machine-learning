@@ -39,7 +39,9 @@
 </div>
 
 ---
-
+<!-- ---------------------------------------------------------------->
+<!-- talvez quitar -->
+<!-- ---------------------------------------------------------------->
 <div align="center">
 
 ## 📋 Tabla de Contenidos
@@ -90,7 +92,7 @@
 
 | 📦 Dataset Seleccionado | ⚙️ Tecnologías |
 | :--- | :--- |
-| ➡️ **Nombre:** ________________________ <br>➡️ **Fuente:** __________________________ <br>➡️ **Registros:** _______________________ <br>➡️ **Variables:** __________________________ | 🗄️ **BD Relacional:** SQL Server 2012 <br>🍃 **BD NoSQL:** MongoDB <br>🐍 **Procesamiento y ML:** Python 3.10+, Jupyter, pandas, scikit-learn <br>📊 **Visualización:** Streamlit, matplotlib <br>🐙 **Control de versiones:** Git + GitHub |
+| ➡️ **Nombre:** ________________________ <br>➡️ **Fuente:** __________________________ <br>➡️ **Registros:** _______________________ <br>➡️ **Variables:** _______________________ | 🗄️ **BD Relacional:** SQL Server 2012 <br>🍃 **BD NoSQL:** MongoDB <br>🐍 **Procesamiento y ML:** Python 3.10+, Jupyter, pandas, scikit-learn <br>📊 **Visualización:** Streamlit, matplotlib <br>🐙 **Control de versiones:** Git + GitHub |
 
 
 
