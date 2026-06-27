@@ -222,7 +222,7 @@ with tab2:
     
     try:
         conn = get_sql_connection()
-            engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
+        engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
         
         query_auditoria = """
             SELECT TOP 50
@@ -435,7 +435,7 @@ with tab4:
     
     try:
         conn = get_sql_connection()
-            engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
+        engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
         
         metrics_query = """
             SELECT 
@@ -511,7 +511,7 @@ with tab5:
         if sql_code.strip():
             try:
                 conn = get_sql_connection()
-            engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
+                engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
                 
                 with st.expander("📜 SQL a ejecutar"):
                     st.code(sql_code, language='sql')
