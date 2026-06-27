@@ -42,12 +42,22 @@ def show_modelo_tab(ROOT_DIR):
             if submit:
                 # Imputación inteligente con medianas
                 input_dict = medians.to_dict()
-                input_dict['LIMIT_BAL'] = limit_bal
-                input_dict['PAY_0'] = pay_0
-                input_dict['BILL_AMT1'] = bill_amt1
-                input_dict['PAY_AMT1'] = pay_amt1
-                input_dict['AGE'] = age
                 
+                # 🔍 Mapeo dinámico: Busca el nombre real de la columna en el modelo entrenado
+                limit_key = next((c for c in columns if 'LIMIT' in c or 'CREDITO' in c), 'LIMIT_BAL')
+                pay_key = next((c for c in columns if c in ['PAY_0', 'PAGO_MES_ACTUAL']), 'PAY_0')
+                bill_key = next((c for c in columns if 'BILL_AMT1' in c or 'FACTURA_MES_1' in c), 'BILL_AMT1')
+                pay_amt_key = next((c for c in columns if 'PAY_AMT1' in c or 'PAGO_REALIZADO_MES_1' in c), 'PAY_AMT1')
+                age_key = next((c for c in columns if c in ['AGE', 'EDAD']), 'AGE')
+
+                # Asignamos los valores del formulario a las claves correctas
+                input_dict[limit_key] = limit_bal
+                input_dict[pay_key] = pay_0
+                input_dict[bill_key] = bill_amt1
+                input_dict[pay_amt_key] = pay_amt1
+                input_dict[age_key] = age
+                
+                # Aseguramos el orden exacto de las columnas para el modelo
                 input_df = pd.DataFrame([input_dict])[columns]
                 input_scaled = scaler.transform(input_df)
                 
@@ -66,7 +76,7 @@ def show_modelo_tab(ROOT_DIR):
                     record = {
                         "timestamp": datetime.now(),
                         "model": "XGBoost_GradientBoosting",
-                        "input_data": input_dict,
+                        "input_data": {k: float(v) if isinstance(v, (int, float)) else v for k, v in input_dict.items()},
                         "probability": float(prob),
                         "prediction": int(pred)
                     }

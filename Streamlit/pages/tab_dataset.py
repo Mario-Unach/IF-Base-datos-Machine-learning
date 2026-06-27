@@ -9,16 +9,20 @@ def show_dataset_tab(ROOT_DIR):
     # Cargar dataset local para EDA
     df = pd.read_csv(ROOT_DIR / "Dataset" / "dataset_impagos_limpio.csv")
     
+    # Nombres reales de las columnas en tu CSV limpio
+    target_col = 'Incumplimiento'
+    age_col = 'Edad'
+    
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("Distribución de Variable Objetivo")
-        fig = px.pie(df, names='default payment next month', title='Proporción de Defaults',
+        fig = px.pie(df, names=target_col, title='Proporción de Defaults',
                      color_discrete_sequence=px.colors.sequential.Blues_r)
         st.plotly_chart(fig, use_container_width=True)
         
     with col2:
         st.subheader("Edad vs Probabilidad de Impago")
-        fig = px.histogram(df, x='AGE', color='default payment next month', barmode='overlay',
+        fig = px.histogram(df, x=age_col, color=target_col, barmode='overlay',
                            title='Distribución por Edad', color_discrete_sequence=px.colors.qualitative.Pastel)
         st.plotly_chart(fig, use_container_width=True)
 
