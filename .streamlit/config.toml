@@ -1,0 +1,6 @@
+[theme]
+primaryColor = "#005EB8"       # Azul corporativo/académico
+backgroundColor = "#FFFFFF"    # Fondo blanco para limpieza visual
+secondaryBackgroundColor = "#F4F6F9" # Gris claro para sidebars y tabs
+textColor = "#1E1E1E"          # Texto oscuro para alta legibilidad
+font = "sans serif"
