@@ -125,178 +125,88 @@ with tab1:
             height=400
         )
         
-        # Estadísticas descriptivas
-        st.markdown("#### 📊 Estadísticas Descriptivas")
-        if not df.empty:
-            st.write(df.describe())
+        # Estadísticas descriptivas en expander
+        with st.expander("📊 Ver Estadísticas Descriptivas"):
+            if not df.empty:
+                st.write(df.describe())
         
         conn.close()
         
     except Exception as e:
         st.error(f"❌ Error al cargar datos: {str(e)}")
-    
-    # Información de la estructura
-    st.divider()
-    st.markdown("### 📋 Estructura de la Base de Datos")
-    
-    col_info1, col_info2 = st.columns(2)
-    
-    with col_info1:
-        st.markdown("""
-        #### Tablas de Dimensión (Catálogos)
-        
-        **dim_sexo**
-        - `id_sexo` (PK): Identificador del sexo
-        - `descripcion_sexo`: Masculino/Femenino
-        
-        **dim_educacion**
-        - `id_educacion` (PK): Identificador del nivel educativo
-        - `nivel_educativo`: Posgrado, Universidad, Bachillerato, etc.
-        
-        **dim_estado_civil**
-        - `id_estado_civil` (PK): Identificador del estado civil
-        - `descripcion_estado_civil`: Casado, Soltero, Otros
-        
-        **dim_tiempo_mes**
-        - `id_mes` (PK): Identificador del mes
-        - `mes_referencia`: Descripción del mes (ej. Septiembre 2005)
-        - `orden_historial`: Orden cronológico
-        """)
-    
-    with col_info2:
-        st.markdown("""
-        #### Tablas Principales
-        
-        **dim_cliente**
-        - `id_cliente` (PK): Identificador único del cliente
-        - `id_sexo` (FK): Referencia a dim_sexo
-        - `id_educacion` (FK): Referencia a dim_educacion
-        - `id_estado_civil` (FK): Referencia a dim_estado_civil
-        - `edad`: Edad del cliente
-        - `limite_credito`: Límite de crédito aprobado
-        
-        **historial_pagos**
-        - `id_historial` (PK): Identificador del registro histórico
-        - `id_cliente` (FK): Referencia al cliente
-        - `id_mes` (FK): Referencia al mes
-        - `id_estatus_pago` (FK): Estado del pago
-        - `monto_estado_cuenta`: Monto facturado
-        - `monto_pago_anterior`: Monto pagado
-        
-        **riesgo_crediticio**
-        - `id_cliente` (PK/FK): Referencia al cliente
-        - `incumplimiento_proximo_mes`: Target (0/1)
-        """)
 
 with tab2:
     st.markdown("### 🏗️ Modelo Entidad-Relación Normalizado")
     
-    st.markdown("""
-    #### Diagrama Conceptual de la Base de Datos
-    
-    La base de datos sigue un diseño normalizado en **3ra Forma Normal (3NF)** para garantizar:
-    - ✅ Integridad referencial
-    - ✅ Minimización de redundancia
-    - ✅ Optimización de consultas analíticas
-    """)
-    
-    # Crear diagrama ER simplificado con Plotly
-    fig = go.Figure()
-    
-    # Agregar nodos (tablas)
-    tables = {
-        'dim_cliente': (0, 0),
-        'dim_sexo': (-2, 2),
-        'dim_educacion': (0, 2),
-        'dim_estado_civil': (2, 2),
-        'historial_pagos': (-2, -2),
-        'riesgo_crediticio': (2, -2)
+    # Diagrama ER usando Mermaid
+    er_diagram = """
+erDiagram
+    dim_estado_civil {
+        int id_estado_civil PK
+        varchar descripcion_estado_civil
     }
+
+    dim_sexo {
+        int id_sexo PK
+        varchar descripcion_sexo
+    }
+
+    dim_educacion {
+        int id_educacion PK
+        varchar nivel_educativo
+    }
+
+    dim_cliente {
+        int id_cliente PK
+        int id_sexo FK
+        int id_educacion FK
+        int id_estado_civil FK
+        int edad
+        float limite_credito
+    }
+
+    riesgo_crediticio {
+        int id_cliente PK,FK
+        int incumplimiento_proximo_mes
+    }
+
+    dim_estatus_pago {
+        int id_estatus PK
+        varchar descripcion_estatus
+    }
+
+    dim_tiempo_mes {
+        int id_mes PK
+        varchar mes_referencia
+        int orden_historial
+    }
+
+    historial_pagos {
+        int id_historial PK
+        int id_cliente FK
+        int id_mes FK
+        int id_estatus_pago FK
+        float monto_estado_cuenta
+        float monto_pago_anterior
+    }
+
+    dim_estado_civil ||--o{ dim_cliente : "tiene"
+    dim_sexo ||--o{ dim_cliente : "tiene"
+    dim_educacion ||--o{ dim_cliente : "tiene"
+    dim_cliente ||--o| riesgo_crediticio : "posee"
+    dim_cliente ||--o{ historial_pagos : "realiza"
+    dim_estatus_pago ||--o{ historial_pagos : "clasifica"
+    dim_tiempo_mes ||--o{ historial_pagos : "registra"
+    """
     
-    for table, pos in tables.items():
-        fig.add_trace(go.Scatter(
-            x=[pos[0]], y=[pos[1]],
-            mode='markers+text',
-            marker=dict(size=40, symbol='square', color='#1f77b4'),
-            text=[table],
-            textposition='middle center',
-            textfont=dict(size=10, color='white'),
-            name=table
-        ))
-    
-    fig.update_layout(
-        title='🗺️ Diagrama Simplificado de Relaciones',
-        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        width=800,
-        height=500,
-        showlegend=False
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-    
-    st.markdown("""
-    #### Índices Implementados
-    
-    **Índices Clustered:**
-    - PK en todas las tablas principales
-    
-    **Índices Non-Clustered:**
-    ```sql
-    CREATE NONCLUSTERED INDEX idx_historial_cliente_mes 
-    ON historial_pagos (id_cliente, id_mes)
-    INCLUDE (id_estatus_pago, monto_estado_cuenta, monto_pago_anterior);
-    
-    CREATE NONCLUSTERED INDEX idx_riesgo_target 
-    ON riesgo_crediticio (incumplimiento_proximo_mes)
-    INCLUDE (id_cliente);
-    ```
-    
-    #### Vistas Estructuradas
-    
-    **vw_ml_dataset:** Vista optimizada para consumo de algoritmos ML
-    - Combina cliente, historial pivotado y target
-    - Elimina necesidad de joins complejos en Python
-    
-    **vw_cliente_detallado:** Vista para análisis exploratorio
-    - Incluye descripciones de catálogos
-    - Ideal para reporting ejecutivo
-    """)
+    st.markdown(er_diagram)
 
 with tab3:
     st.markdown("### 📈 Visualizaciones Avanzadas del Dataset")
     
     try:
         conn = get_sql_connection()
-        
-        # KPIs principales
-        col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
-        
-        query_kpis = """
-            SELECT 
-                COUNT(DISTINCT c.id_cliente) AS total_clientes,
-                AVG(c.limite_credito) AS avg_limite,
-                MIN(c.limite_credito) AS min_limite,
-                MAX(c.limite_credito) AS max_limite,
-                AVG(c.edad) AS avg_edad,
-                SUM(CAST(r.incumplimiento_proximo_mes AS INT)) * 100.0 / COUNT(*) AS tasa_default
-            FROM dim_cliente c
-            INNER JOIN riesgo_crediticio r ON c.id_cliente = r.id_cliente
-        """
         engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
-        df_kpis = pd.read_sql(text(query_kpis), engine)
-        
-        with col_kpi1:
-            st.metric("👥 Total Clientes", f"{int(df_kpis['total_clientes'][0]):,}")
-        
-        with col_kpi2:
-            st.metric("💰 Límite Promedio", f"${df_kpis['avg_limite'][0]:,.2f}")
-        
-        with col_kpi3:
-            st.metric("📅 Edad Promedio", f"{df_kpis['avg_edad'][0]:.1f} años")
-        
-        with col_kpi4:
-            st.metric("⚠️ Tasa Incumplimiento", f"{df_kpis['tasa_default'][0]:.2f}%")
         
         st.divider()
         
@@ -407,20 +317,6 @@ with tab4:
             ORDER BY porcentaje_impago DESC
         """,
         
-        "Historial completo de un cliente específico (ID=52)": """
-            SELECT 
-                hp.id_cliente,
-                tm.mes_referencia,
-                ep.descripcion_estatus AS estado_de_pago,
-                hp.monto_estado_cuenta,
-                hp.monto_pago_anterior
-            FROM historial_pagos hp
-            INNER JOIN dim_tiempo_mes tm ON hp.id_mes = tm.id_mes
-            INNER JOIN dim_estatus_pago ep ON hp.id_estatus_pago = ep.id_estatus
-            WHERE hp.id_cliente = 52
-            ORDER BY tm.orden_historial
-        """,
-        
         "Estadísticas de auditoría": """
             SELECT 
                 tabla_afectada,
@@ -441,7 +337,7 @@ with tab4:
             engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
             query = text(consultas[consulta_seleccionada])
             
-            # Mostrar la consulta SQL
+            # Mostrar la consulta SQL en expander
             with st.expander("📜 Ver SQL"):
                 st.code(query.string, language='sql')
             
@@ -457,24 +353,29 @@ with tab4:
     
     # Editor SQL personalizado
     st.divider()
-    st.markdown("### ⌨️ Editor SQL Personalizado")
     
-    sql_custom = st.text_area(
-        "Escribe tu consulta SQL:",
-        height=150,
-        placeholder="SELECT TOP 100 * FROM vw_ml_dataset..."
-    )
-    
-    if st.button("🚀 Ejecutar Consulta Personalizada"):
-        if sql_custom.strip():
-            try:
-                conn = get_sql_connection()
-                engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
-                df_custom = pd.read_sql(text(sql_custom), engine)
-                st.success(f"✅ Consulta ejecutada: {len(df_custom)} registros")
-                st.dataframe(df_custom, use_container_width=True)
-                conn.close()
-            except Exception as e:
-                st.error(f"❌ Error: {str(e)}")
-        else:
-            st.warning("⚠️ Por favor escribe una consulta SQL")
+    with st.expander("⌨️ Editor SQL Personalizado", expanded=False):
+        sql_custom = st.text_area(
+            "Escribe tu consulta SQL:",
+            height=150,
+            placeholder="SELECT TOP 100 * FROM vw_ml_dataset..."
+        )
+        
+        col_btn1, col_btn2 = st.columns([3, 1])
+        with col_btn1:
+            if st.button("🚀 Ejecutar Consulta Personalizada"):
+                if sql_custom.strip():
+                    try:
+                        conn = get_sql_connection()
+                        engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
+                        df_custom = pd.read_sql(text(sql_custom), engine)
+                        st.success(f"✅ Consulta ejecutada: {len(df_custom)} registros")
+                        st.dataframe(df_custom, use_container_width=True)
+                        conn.close()
+                    except Exception as e:
+                        st.error(f"❌ Error: {str(e)}")
+                else:
+                    st.warning("⚠️ Por favor escribe una consulta SQL")
+        with col_btn2:
+            if st.button("🧹 Limpiar"):
+                st.session_state.sql_custom = ""
