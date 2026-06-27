@@ -1,6 +1,19 @@
 [theme]
-primaryColor = "#005EB8"       # Azul corporativo/académico
-backgroundColor = "#FFFFFF"    # Fondo blanco para limpieza visual
-secondaryBackgroundColor = "#F4F6F9" # Gris claro para sidebars y tabs
-textColor = "#1E1E1E"          # Texto oscuro para alta legibilidad
-font = "sans serif"
+primaryColor = "#00d4ff"
+backgroundColor = "#0a0e17"
+secondaryBackgroundColor = "#111827"
+textColor = "#e5e7eb"
+font = "Inter"
+
+[server]
+headless = true
+port = 8501
+enableCORS = false
+enableXsrfProtection = true
+
+[browser]
+gatherUsageStats = false
+
+[runner]
+magicEnabled = true
+fastReruns = true

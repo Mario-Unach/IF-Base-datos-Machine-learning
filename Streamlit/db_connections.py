@@ -30,10 +30,27 @@ def get_sql_connection():
 # ---------------------------------------------------------
 # CONEXIÓN A MONGODB (Arquitectura Híbrida)
 # ---------------------------------------------------------
-def get_mongo_db():
+def get_mongo_connection():
+    """
+    Retorna la conexión al cliente MongoDB.
+    """
     try:
-        client = pymongo.MongoClient("mongodb://localhost:27017/")
-        return client["ML_Experiments"]
+        client = pymongo.MongoClient("mongodb://localhost:27017/", serverSelectionTimeoutMS=3000)
+        client.admin.command('ping')
+        return client
+    except Exception as e:
+        st.error(f"❌ Error MongoDB: {e}")
+        return None
+
+def get_mongo_db():
+    """
+    Retorna la base de datos ML_Experiments de MongoDB.
+    """
+    try:
+        client = get_mongo_connection()
+        if client:
+            return client["ML_Experiments"]
+        return None
     except Exception as e:
         st.error(f"❌ Error MongoDB: {e}")
         return None

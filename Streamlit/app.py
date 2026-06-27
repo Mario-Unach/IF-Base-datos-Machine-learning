@@ -8,7 +8,7 @@ import os
 
 # Agregar el directorio actual al path para importar db_connections
 sys.path.insert(0, str(Path(__file__).parent))
-from db_connections import get_sql_connection, get_mongo_connection
+from db_connections import get_sql_connection
 
 # Configuración de página
 st.set_page_config(

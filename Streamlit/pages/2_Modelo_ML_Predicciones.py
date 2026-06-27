@@ -7,7 +7,7 @@ import sys
 
 # Agregar el directorio Streamlit al path para importar db_connections
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from db_connections import get_sql_connection, get_mongo_connection
+from db_connections import get_sql_connection
 from datetime import datetime
 
 # Configuración de página
