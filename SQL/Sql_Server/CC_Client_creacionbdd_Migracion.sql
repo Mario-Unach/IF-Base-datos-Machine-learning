@@ -152,11 +152,11 @@ CREATE TABLE staging_credit_cards (
 -- Cargar los datos del archivo a la tabla staging
 -- Asegúrate de cambiar la ruta por la ubicación real de tu archivo
 BULK INSERT staging_credit_cards
-FROM 'E:\Unach\Semestre4\EstudioGITClaude\UNACH-4toSemestre\05-Administracion-BD\Proyecto\Incumplimiento\default of credit card clients.csv'
+FROM '/var/opt/mssql/temp/default of credit card clients.csv'
 WITH (
-    FIELDTERMINATOR = ';',  -- El separador de tu archivo
-    ROWTERMINATOR = '\n',   -- Salto de línea
-    FIRSTROW = 3            -- Empezamos en la fila 3 porque la 1 y 2 son los encabezados (X1, ID, etc.)
+    FIELDTERMINATOR = ',',  -- El separador de tu archivo
+    ROWTERMINATOR = '0x0a',   -- Salto de línea
+    FIRSTROW = 3           -- Empezamos en la fila 3 porque la 1 y 2 son los encabezados (X1, ID, etc.)
 );
 
 -- POBLAR DATOS A TABLAS DIM
