@@ -169,8 +169,8 @@ GRANT SELECT ON riesgo_crediticio TO rol_analista;
 GRANT CONTROL ON DATABASE::CC_Client TO rol_admin;
 
 -- Crear logins con contraseña (nivel servidor)
-CREATE LOGIN analista WITH PASSWORD = 'Analista123!';
-CREATE LOGIN admin WITH PASSWORD = 'Admin123!';
+CREATE LOGIN analista WITH PASSWORD = 'ContraseñaSegura123!';
+CREATE LOGIN admin WITH PASSWORD = 'ContraseñaSegura456!';
 
 -- Crear usuarios en la base vinculados a los logins
 CREATE USER analista FOR LOGIN analista;
@@ -185,34 +185,34 @@ GO
 ---Estrategia de Backups y Restauración--------
 -- Backup completo de la base de datos CC_Client
 BACKUP DATABASE CC_Client
-TO DISK = 'E:\Backups\CC_Client_Full.bak'
+TO DISK = '/var/opt/mssql/backups/CC_Client_Full.bak'
 WITH FORMAT, INIT, NAME = 'Full Backup CC_Client';
 GO
 
 -- Backup diferencial
 BACKUP DATABASE CC_Client
-TO DISK = 'E:\Backups\CC_Client_Diff.bak'
+TO DISK = '/var/opt/mssql/backups/CC_Client_Diff.bak'
 WITH DIFFERENTIAL, NAME = 'Differential Backup CC_Client';
 GO
 
 -- Backup de log transaccional 
 BACKUP LOG CC_Client
-TO DISK = 'E:\Backups\CC_Client_Log.trn'
+TO DISK = '/var/opt/mssql/backups/CC_Client_Log.trn'
 WITH NAME = 'Log Backup CC_Client';
 GO
 
 -- Restauracion 
 -- Restaurar FULL
 RESTORE DATABASE CC_Client
-FROM DISK = 'E:\Backups\CC_Client_Full.bak'
+FROM DISK = '/var/opt/mssql/backups/CC_Client_Full.bak'
 WITH NORECOVERY; -- Dejar en estado de restauración para aplicar logs
 
 -- Restaurar DIFF (si existe)
 RESTORE DATABASE CC_Client
-FROM DISK = 'E:\Backups\CC_Client_Diff.bak'
+FROM DISK = '/var/opt/mssql/backups/CC_Client_Diff.bak'
 WITH NORECOVERY;
 
 -- Restaurar logs (uno o varios)
 RESTORE LOG CC_Client
-FROM DISK = 'E:\Backups\CC_Client_Log.trn'
+FROM DISK = '/var/opt/mssql/backups/CC_Client_Log.trn'
 WITH RECOVERY; -- Último log con RECOVERY para dejar la BD operativa
