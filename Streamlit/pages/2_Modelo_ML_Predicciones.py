@@ -103,7 +103,7 @@ st.markdown("""
 st.markdown('<p class="page-header">🤖 Modelo Predictivo XGBoost - Detección de Impagos</p>', unsafe_allow_html=True)
 
 # Ruta de los modelos - usar ruta absoluta correcta desde el directorio raíz del workspace
-MODEL_PATH = Path("/workspace/Models/Gradient_Boosting/Notebook")
+MODEL_PATH = Path("Models/Gradient_Boosting/Notebook")
 
 # Verificar que los archivos existen antes de cargar
 required_files = ["xgb_model.pkl", "scaler.pkl", "columns.pkl", "medians.pkl"]
