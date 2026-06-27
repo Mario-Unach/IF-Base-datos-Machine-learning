@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 import plotly.graph_objects as go
 import plotly.express as px
+from streamlit_mermaid import st_mermaid
 
 # Agregar el directorio Streamlit al path para importar db_connections
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -424,86 +425,64 @@ with tab1:
             st.warning(f"⚠️ No se pudo guardar en MongoDB: {str(e)}")
 
 with tab2:
-    st.markdown("### 📊 Evaluación del Modelo")
+    st.markdown("### 🏗️ Modelo Entidad-Relación Normalizado")
     
-    # Métricas predefinidas (se deberían cargar desde MongoDB o archivo)
-    st.markdown("#### 🎯 Métricas de Rendimiento")
+    # Diagrama ER - Sin los backticks de markdown
+    er_diagram = """
+    erDiagram
+        dim_estado_civil {
+            int id_estado_civil PK
+            varchar descripcion_estado_civil
+        }
+        dim_sexo {
+            int id_sexo PK
+            varchar descripcion_sexo
+        }
+        dim_educacion {
+            int id_educacion PK
+            varchar nivel_educativo
+        }
+        dim_cliente {
+            int id_cliente PK
+            int id_sexo FK
+            int id_educacion FK
+            int id_estado_civil FK
+            int edad
+            float limite_credito
+        }
+        riesgo_crediticio {
+            int id_cliente FK
+            int incumplimiento_proximo_mes
+        }
+        dim_estatus_pago {
+            int id_estatus PK
+            varchar descripcion_estatus
+        }
+        dim_tiempo_mes {
+            int id_mes PK
+            varchar mes_referencia
+            int orden_historial
+        }
+        historial_pagos {
+            int id_historial PK
+            int id_cliente FK
+            int id_mes FK
+            int id_estatus_pago FK
+            float monto_estado_cuenta
+            float monto_pago_anterior
+        }
+        dim_estado_civil ||--o{ dim_cliente : "tiene"
+        dim_sexo ||--o{ dim_cliente : "tiene"
+        dim_educacion ||--o{ dim_cliente : "tiene"
+        dim_cliente ||--o| riesgo_crediticio : "posee"
+        dim_cliente ||--o{ historial_pagos : "realiza"
+        dim_estatus_pago ||--o{ historial_pagos : "clasifica"
+        dim_tiempo_mes ||--o{ historial_pagos : "registra"
+    """
     
-    col_met1, col_met2, col_met3, col_met4 = st.columns(4)
-    
-    with col_met1:
-        st.metric("Accuracy", "82.3%")
-    
-    with col_met2:
-        st.metric("Precision", "78.1%")
-    
-    with col_met3:
-        st.metric("Recall", "75.4%")
-    
-    with col_met4:
-        st.metric("F1-Score", "76.7%")
-    
-    st.divider()
-    
-    # Matriz de confusión simulada
-    st.markdown("#### 📋 Matriz de Confusión")
-    
-    col_conf1, col_conf2 = st.columns(2)
-    
-    with col_conf1:
-        # Datos simulados de matriz de confusión
-        confusion_data = pd.DataFrame(
-            [[3850, 650], [490, 2010]],
-            columns=['Predicho No Impago', 'Predicho Impago'],
-            index=['Real No Impago', 'Real Impago']
-        )
-        
-        fig_conf = px.imshow(confusion_data, 
-                             text_auto=True,
-                             color_continuous_scale='Blues',
-                             title='Matriz de Confusión')
-        st.plotly_chart(fig_conf, use_container_width=True)
-    
-    with col_conf2:
-        st.markdown("""
-        **Análisis de Métricas:**
-        
-        - **Verdaderos Positivos (VP):** 2010 - Clientes que sí incumplieron y fueron correctamente identificados
-        
-        - **Verdaderos Negativos (VN):** 3850 - Clientes que no incumplieron y fueron correctamente identificados
-        
-        - **Falsos Positivos (FP):** 650 - Clientes clasificados erróneamente como de alto riesgo
-        
-        - **Falsos Negativos (FN):** 490 - Clientes de alto riesgo clasificados erróneamente como bajos
-        
-        **Interpretación:**
-        El modelo tiene un buen balance entre precisión y recall, siendo ligeramente más conservador para minimizar falsos negativos (clientes riesgosos que pasan desapercibidos).
-        """)
-    
-    st.divider()
-    
-    # Importancia de features
-    st.markdown("#### 🔍 Importancia de Features")
-    
-    try:
-        # Obtener importancia de features del modelo XGBoost
-        importance_df = pd.DataFrame({
-            'Feature': columns,
-            'Importance': model.feature_importances_
-        }).sort_values('Importance', ascending=False)
-        
-        fig_imp = px.bar(importance_df.head(15), 
-                         x='Importance', 
-                         y='Feature',
-                         orientation='h',
-                         title='Top 15 Features Más Importantes',
-                         color='Importance',
-                         color_continuous_scale='Viridis')
-        fig_imp.update_layout(yaxis={'categoryorder': 'total ascending'})
-        st.plotly_chart(fig_imp, use_container_width=True)
-        
-    except Exception as e:
-        st.error(f"Error al mostrar importancia de features: {str(e)}")
+    # Usar st_mermaid en lugar de st.markdown
+    with st.container(border=True):
+        st_mermaid(er_diagram)
 
 with tab3:
     st.markdown("### 🧪 Experimentos Registrados en MongoDB")
