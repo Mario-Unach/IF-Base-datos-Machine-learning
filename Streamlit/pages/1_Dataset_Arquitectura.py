@@ -197,9 +197,16 @@ erDiagram
     dim_cliente ||--o{ historial_pagos : "realiza"
     dim_estatus_pago ||--o{ historial_pagos : "clasifica"
     dim_tiempo_mes ||--o{ historial_pagos : "registra"
-    """
+    \"\"\"
     
-    st.markdown(er_diagram)
+    # Renderizar diagrama Mermaid correctamente
+    st.markdown(f'''
+    <div style="background: rgba(30, 41, 59, 0.4); padding: 20px; border-radius: 10px; border: 1px solid rgba(0, 212, 255, 0.2);">
+    ```mermaid
+    {er_diagram.strip()}
+    ```
+    </div>
+    ''', unsafe_allow_html=True)
 
 with tab3:
     st.markdown("### 📈 Visualizaciones Avanzadas del Dataset")
