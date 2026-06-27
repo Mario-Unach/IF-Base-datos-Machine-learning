@@ -13,3 +13,4 @@ streamlit
 plotly
 pyodbc
 sqlalchemy
+streamlit-mermaid
