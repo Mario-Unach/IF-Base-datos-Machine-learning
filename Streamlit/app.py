@@ -5,10 +5,11 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import os
+from sqlalchemy import create_engine, text
 
 # Agregar el directorio actual al path para importar db_connections
 sys.path.insert(0, str(Path(__file__).parent))
-from db_connections import get_sql_connection
+from db_connections import get_sql_connection, get_mongo_connection
 
 # Configuración de página
 st.set_page_config(
@@ -134,19 +135,21 @@ with st.sidebar:
     
     st.markdown("### 📊 KPIs en Tiempo Real")
     
-    # Conexión a SQL Server para obtener KPIs
+    # Conexión a SQL Server para obtener KPIs usando SQLAlchemy
     try:
         conn = get_sql_connection()
-        query_kpis = """
+        engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
+        
+        query_kpis = text("""
             SELECT 
                 COUNT(DISTINCT c.id_cliente) AS total_clientes,
                 AVG(c.limite_credito) AS avg_limite_credito,
                 AVG(c.edad) AS avg_edad,
-                SUM(r.incumplimiento_proximo_mes) * 100.0 / COUNT(*) AS tasa_incumplimiento
+                SUM(CAST(r.incumplimiento_proximo_mes AS INT)) * 100.0 / COUNT(*) AS tasa_incumplimiento
             FROM dim_cliente c
             INNER JOIN riesgo_crediticio r ON c.id_cliente = r.id_cliente
-        """
-        df_kpis = pd.read_sql(query_kpis, conn)
+        """)
+        df_kpis = pd.read_sql(query_kpis, engine)
         
         st.markdown('<div class="metric-container">', unsafe_allow_html=True)
         st.metric("👥 Total Clientes", f"{int(df_kpis['total_clientes'][0]):,}")
@@ -220,16 +223,18 @@ col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
 
 try:
     conn = get_sql_connection()
-    query_kpis = """
+    engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
+    
+    query_kpis = text("""
         SELECT 
             COUNT(DISTINCT c.id_cliente) AS total_clientes,
             AVG(c.limite_credito) AS avg_limite_credito,
             AVG(c.edad) AS avg_edad,
-            SUM(r.incumplimiento_proximo_mes) * 100.0 / COUNT(*) AS tasa_incumplimiento
+            SUM(CAST(r.incumplimiento_proximo_mes AS INT)) * 100.0 / COUNT(*) AS tasa_incumplimiento
         FROM dim_cliente c
         INNER JOIN riesgo_crediticio r ON c.id_cliente = r.id_cliente
-    """
-    df_kpis = pd.read_sql(query_kpis, conn)
+    """)
+    df_kpis = pd.read_sql(query_kpis, engine)
     
     with col_kpi1:
         st.metric("👥 Total Clientes", f"{int(df_kpis['total_clientes'][0]):,}")
@@ -252,16 +257,17 @@ col_graf1, col_graf2 = st.columns(2)
 with col_graf1:
     try:
         conn = get_sql_connection()
+        engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
         
         # Distribución por educación
-        query_edu = """
+        query_edu = text("""
             SELECT e.nivel_educativo, COUNT(*) as cantidad
             FROM dim_cliente c
             INNER JOIN dim_educacion e ON c.id_educacion = e.id_educacion
             GROUP BY e.nivel_educativo
             ORDER BY cantidad DESC
-        """
-        df_edu = pd.read_sql(query_edu, conn)
+        """)
+        df_edu = pd.read_sql(query_edu, engine)
         
         fig_pie = px.pie(df_edu, values='cantidad', names='nivel_educativo', 
                          title='📚 Distribución por Nivel Educativo',
@@ -282,15 +288,16 @@ with col_graf1:
 with col_graf2:
     try:
         conn = get_sql_connection()
+        engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
         
         # Distribución por estado civil
-        query_civil = """
+        query_civil = text("""
             SELECT ec.descripcion_estado_civil, COUNT(*) as cantidad
             FROM dim_cliente c
             INNER JOIN dim_estado_civil ec ON c.id_estado_civil = ec.id_estado_civil
             GROUP BY ec.descripcion_estado_civil
-        """
-        df_civil = pd.read_sql(query_civil, conn)
+        """)
+        df_civil = pd.read_sql(query_civil, engine)
         
         fig_bar = px.bar(df_civil, x='descripcion_estado_civil', y='cantidad',
                          title='💍 Distribución por Estado Civil',

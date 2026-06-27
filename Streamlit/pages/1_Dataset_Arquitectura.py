@@ -4,6 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import sys
 from pathlib import Path
+from sqlalchemy import create_engine, text
 
 # Agregar el directorio Streamlit al path para importar db_connections
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -111,8 +112,9 @@ with tab1:
     
     try:
         conn = get_sql_connection()
-        query = f"SELECT TOP {top_n} * FROM {tabla_seleccionada}"
-        df = pd.read_sql(query, conn)
+        engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
+        query = text(f"SELECT TOP {top_n} * FROM {tabla_seleccionada}")
+        df = pd.read_sql(query, engine)
         
         st.success(f"✅ {len(df)} registros cargados exitosamente")
         
@@ -277,11 +279,12 @@ with tab3:
                 MIN(c.limite_credito) AS min_limite,
                 MAX(c.limite_credito) AS max_limite,
                 AVG(c.edad) AS avg_edad,
-                SUM(r.incumplimiento_proximo_mes) * 100.0 / COUNT(*) AS tasa_default
+                SUM(CAST(r.incumplimiento_proximo_mes AS INT)) * 100.0 / COUNT(*) AS tasa_default
             FROM dim_cliente c
             INNER JOIN riesgo_crediticio r ON c.id_cliente = r.id_cliente
         """
-        df_kpis = pd.read_sql(query_kpis, conn)
+        engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
+        df_kpis = pd.read_sql(text(query_kpis), engine)
         
         with col_kpi1:
             st.metric("👥 Total Clientes", f"{int(df_kpis['total_clientes'][0]):,}")
@@ -302,8 +305,8 @@ with tab3:
         
         with row1_col1:
             # Distribución de límites de crédito
-            query_hist = "SELECT limite_credito FROM dim_cliente"
-            df_hist = pd.read_sql(query_hist, conn)
+            query_hist = text("SELECT limite_credito FROM dim_cliente")
+            df_hist = pd.read_sql(query_hist, engine)
             
             fig_hist = px.histogram(df_hist, x='limite_credito', nbins=50,
                                     title='💰 Distribución de Límites de Crédito',
@@ -314,14 +317,14 @@ with tab3:
         
         with row1_col2:
             # Distribución por educación y estado civil
-            query_pie = """
+            query_pie = text("""
                 SELECT e.nivel_educativo, COUNT(*) as cantidad
                 FROM dim_cliente c
                 INNER JOIN dim_educacion e ON c.id_educacion = e.id_educacion
                 GROUP BY e.nivel_educativo
                 ORDER BY cantidad DESC
-            """
-            df_pie = pd.read_sql(query_pie, conn)
+            """)
+            df_pie = pd.read_sql(query_pie, engine)
             
             fig_pie = px.pie(df_pie, values='cantidad', names='nivel_educativo',
                              title='📚 Nivel Educativo',
@@ -332,12 +335,12 @@ with tab3:
         
         with row2_col1:
             # Análisis de edad por género
-            query_box = """
+            query_box = text("""
                 SELECT s.descripcion_sexo, c.edad
                 FROM dim_cliente c
                 INNER JOIN dim_sexo s ON c.id_sexo = s.id_sexo
-            """
-            df_box = pd.read_sql(query_box, conn)
+            """)
+            df_box = pd.read_sql(query_box, engine)
             
             fig_box = px.box(df_box, x='descripcion_sexo', y='edad',
                              title='📊 Distribución de Edad por Género',
@@ -347,15 +350,15 @@ with tab3:
         
         with row2_col2:
             # Heatmap de correlación (datos numéricos)
-            query_corr = """
+            query_corr = text("""
                 SELECT TOP 1000
                     c.limite_credito,
                     c.edad,
                     r.incumplimiento_proximo_mes
                 FROM dim_cliente c
                 INNER JOIN riesgo_crediticio r ON c.id_cliente = r.id_cliente
-            """
-            df_corr = pd.read_sql(query_corr, conn)
+            """)
+            df_corr = pd.read_sql(query_corr, engine)
             
             corr_matrix = df_corr.corr()
             
@@ -435,13 +438,14 @@ with tab4:
     if st.button("▶️ Ejecutar Consulta"):
         try:
             conn = get_sql_connection()
-            query = consultas[consulta_seleccionada]
+            engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
+            query = text(consultas[consulta_seleccionada])
             
             # Mostrar la consulta SQL
             with st.expander("📜 Ver SQL"):
-                st.code(query, language='sql')
+                st.code(query.string, language='sql')
             
-            df_result = pd.read_sql(query, conn)
+            df_result = pd.read_sql(query, engine)
             
             st.success(f"✅ Consulta ejecutada: {len(df_result)} registros")
             st.dataframe(df_result, use_container_width=True)
@@ -465,7 +469,8 @@ with tab4:
         if sql_custom.strip():
             try:
                 conn = get_sql_connection()
-                df_custom = pd.read_sql(sql_custom, conn)
+                engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
+                df_custom = pd.read_sql(text(sql_custom), engine)
                 st.success(f"✅ Consulta ejecutada: {len(df_custom)} registros")
                 st.dataframe(df_custom, use_container_width=True)
                 conn.close()

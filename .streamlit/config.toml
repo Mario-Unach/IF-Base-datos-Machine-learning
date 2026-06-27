@@ -1,19 +1,14 @@
 [theme]
 primaryColor = "#00d4ff"
-backgroundColor = "#0a0e17"
-secondaryBackgroundColor = "#111827"
-textColor = "#e5e7eb"
-font = "Inter"
+backgroundColor = "#0f1419"
+secondaryBackgroundColor = "#1a202e"
+textColor = "#e2e8f0"
+font = "sans serif"
 
 [server]
 headless = true
 port = 8501
-enableCORS = false
-enableXsrfProtection = true
+enableXsrfProtection = false
 
 [browser]
 gatherUsageStats = false
-
-[runner]
-magicEnabled = true
-fastReruns = true

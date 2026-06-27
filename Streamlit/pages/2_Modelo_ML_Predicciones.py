@@ -102,8 +102,25 @@ st.markdown("""
 
 st.markdown('<p class="page-header">🤖 Modelo Predictivo XGBoost - Detección de Impagos</p>', unsafe_allow_html=True)
 
-# Ruta de los modelos - usar ruta absoluta correcta
+# Ruta de los modelos - usar ruta absoluta correcta desde el directorio raíz del workspace
 MODEL_PATH = Path("/workspace/Models/Gradient_Boosting/Notebook")
+
+# Verificar que los archivos existen antes de cargar
+required_files = ["xgb_model.pkl", "scaler.pkl", "columns.pkl", "medians.pkl"]
+missing_files = [f for f in required_files if not (MODEL_PATH / f).exists()]
+
+if missing_files:
+    st.error(f"""
+    ❌ **Archivos del modelo no encontrados:**
+    
+    Faltan los siguientes archivos en `{MODEL_PATH}`:
+    {', '.join(missing_files)}
+    
+    💡 **Solución:** 
+    1. Verifica que el notebook de entrenamiento se haya ejecutado correctamente
+    2. Los archivos deben estar en: `Models/Gradient_Boosting/Notebook/`
+    """)
+    st.stop()
 
 # Cargar modelo y preprocesadores
 @st.cache_resource

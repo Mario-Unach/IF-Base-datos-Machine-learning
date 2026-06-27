@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import sys
 from pathlib import Path
+from sqlalchemy import create_engine, text
 
 # Agregar el directorio Streamlit al path para importar db_connections
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -180,6 +181,7 @@ with tab1:
     if st.button("🔄 Verificar Usuarios Actuales"):
         try:
             conn = get_sql_connection()
+            engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
             
             query_usuarios = """
                 SELECT 
@@ -194,7 +196,7 @@ with tab1:
                 ORDER BY u.name
             """
             
-            df_usuarios = pd.read_sql(query_usuarios, conn)
+            df_usuarios = pd.read_sql(text(query_usuarios), engine)
             st.dataframe(df_usuarios, use_container_width=True)
             
             conn.close()
@@ -220,6 +222,7 @@ with tab2:
     
     try:
         conn = get_sql_connection()
+            engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
         
         query_auditoria = """
             SELECT TOP 50
@@ -235,7 +238,7 @@ with tab2:
             ORDER BY fecha_cambio DESC
         """
         
-        df_auditoria = pd.read_sql(query_auditoria, conn)
+        df_auditoria = pd.read_sql(text(query_auditoria), engine)
         
         if not df_auditoria.empty:
             st.dataframe(df_auditoria, use_container_width=True)
@@ -362,6 +365,7 @@ with tab3:
     if st.button("🚀 Ejecutar Backup", type="primary"):
         try:
             conn = get_sql_connection()
+            engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
             cursor = conn.cursor()
             
             if backup_type == "Completo (Full)":
@@ -404,6 +408,7 @@ with tab4:
         st.markdown("**SQL Server**")
         try:
             conn = get_sql_connection()
+            engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
             cursor = conn.cursor()
             cursor.execute("SELECT @@VERSION")
             version = cursor.fetchone()[0]
@@ -430,6 +435,7 @@ with tab4:
     
     try:
         conn = get_sql_connection()
+            engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
         
         metrics_query = """
             SELECT 
@@ -439,7 +445,7 @@ with tab4:
                 (SELECT COUNT(*) FROM sys.indexes) AS total_indices
         """
         
-        df_metrics = pd.read_sql(metrics_query, conn)
+        df_metrics = pd.read_sql(text(metrics_query), engine)
         
         col_m1, col_m2, col_m3, col_m4 = st.columns(4)
         
@@ -483,7 +489,8 @@ with tab5:
     if st.button("▶️ Ejecutar Consulta Rápida"):
         try:
             conn = get_sql_connection()
-            df = pd.read_sql(quick_queries[selected_query], conn)
+            engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
+            df = pd.read_sql(text(quick_queries[selected_query]), engine)
             st.success(f"✅ {len(df)} registros")
             st.dataframe(df, use_container_width=True)
             conn.close()
@@ -504,11 +511,12 @@ with tab5:
         if sql_code.strip():
             try:
                 conn = get_sql_connection()
+            engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
                 
                 with st.expander("📜 SQL a ejecutar"):
                     st.code(sql_code, language='sql')
                 
-                df_result = pd.read_sql(sql_code, conn)
+                df_result = pd.read_sql(text(sql_code), engine)
                 
                 st.success(f"✅ Consulta ejecutada: {len(df_result)} registros")
                 st.dataframe(df_result, use_container_width=True)
