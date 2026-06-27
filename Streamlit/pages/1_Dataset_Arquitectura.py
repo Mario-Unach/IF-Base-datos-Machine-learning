@@ -2,7 +2,12 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from Streamlit.db_connections import get_sql_connection, get_mongo_connection
+import sys
+from pathlib import Path
+
+# Agregar el directorio Streamlit al path para importar db_connections
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from db_connections import get_sql_connection, get_mongo_connection
 
 # Configuración de página específica para esta page
 st.set_page_config(
@@ -11,15 +16,58 @@ st.set_page_config(
     layout="wide"
 )
 
+# CSS personalizado - Tema oscuro consistente
 st.markdown("""
 <style>
+    /* Fondo principal */
+    .stApp {
+        background: linear-gradient(135deg, #0f1419 0%, #1a1f2e 50%, #0d1117 100%);
+    }
+    
+    /* Header de página */
     .page-header {
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: #1f77b4;
-        padding: 1rem 0;
-        border-bottom: 3px solid #1f77b4;
-        margin-bottom: 1.5rem;
+        font-size: 2.8rem;
+        font-weight: 800;
+        background: linear-gradient(90deg, #00d4ff, #7b2cbf);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        padding: 1.5rem 0;
+        margin-bottom: 2rem;
+    }
+    
+    /* Tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 24px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        background: rgba(30, 41, 59, 0.6);
+        border-radius: 8px;
+        padding: 8px 16px;
+        color: #e2e8f0;
+    }
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, rgba(0, 212, 255, 0.2), rgba(123, 44, 191, 0.2));
+        border: 1px solid rgba(0, 212, 255, 0.3);
+        color: #00d4ff;
+    }
+    
+    /* Info boxes */
+    .info-box {
+        background: rgba(30, 41, 59, 0.8);
+        padding: 1.5rem;
+        border-radius: 12px;
+        border-left: 4px solid #00d4ff;
+        margin: 1rem 0;
+    }
+    
+    /* Texto general */
+    .stMarkdown, .stDataFrame, .stTable {
+        color: #e2e8f0;
+    }
+    
+    h1, h2, h3, h4 {
+        color: #f1f5f9 !important;
     }
 </style>
 """, unsafe_allow_html=True)
