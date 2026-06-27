@@ -3,7 +3,11 @@ import pandas as pd
 import numpy as np
 import joblib
 from pathlib import Path
-from Streamlit.db_connections import get_sql_connection, get_mongo_connection
+import sys
+
+# Agregar el directorio Streamlit al path para importar db_connections
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from db_connections import get_sql_connection, get_mongo_connection
 from datetime import datetime
 
 # Configuración de página
@@ -13,42 +17,93 @@ st.set_page_config(
     layout="wide"
 )
 
+# CSS personalizado - Tema oscuro consistente
 st.markdown("""
 <style>
-    .page-header {
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: #2ca02c;
-        padding: 1rem 0;
-        border-bottom: 3px solid #2ca02c;
-        margin-bottom: 1.5rem;
+    /* Fondo principal */
+    .stApp {
+        background: linear-gradient(135deg, #0f1419 0%, #1a1f2e 50%, #0d1117 100%);
     }
-    .prediction-result {
+    
+    /* Header de página */
+    .page-header {
+        font-size: 2.8rem;
+        font-weight: 800;
+        background: linear-gradient(90deg, #00d4ff, #7b2cbf);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        padding: 1.5rem 0;
+        margin-bottom: 2rem;
+    }
+    
+    /* Formulario */
+    .stForm {
+        background: rgba(30, 41, 59, 0.6);
         padding: 2rem;
-        border-radius: 15px;
+        border-radius: 16px;
+        border: 1px solid rgba(148, 163, 184, 0.1);
+    }
+    
+    /* Resultado de predicción */
+    .prediction-result {
+        padding: 2.5rem;
+        border-radius: 20px;
         text-align: center;
-        font-size: 1.5rem;
-        font-weight: bold;
-        margin: 1rem 0;
+        font-size: 2rem;
+        font-weight: 800;
+        margin: 2rem 0;
+        backdrop-filter: blur(10px);
     }
     .risk-low {
-        background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
-        color: #155724;
-        border: 2px solid #28a745;
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.3) 100%);
+        color: #34d399;
+        border: 2px solid #10b981;
+        box-shadow: 0 8px 32px rgba(16, 185, 129, 0.3);
     }
     .risk-high {
-        background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
-        color: #721c24;
-        border: 2px solid #dc3545;
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(220, 38, 38, 0.3) 100%);
+        color: #f87171;
+        border: 2px solid #ef4444;
+        box-shadow: 0 8px 32px rgba(239, 68, 68, 0.3);
+    }
+    
+    /* Sliders */
+    .stSlider label {
+        color: #e2e8f0 !important;
+        font-weight: 600;
+    }
+    
+    /* Selectbox */
+    .stSelectbox label {
+        color: #e2e8f0 !important;
+        font-weight: 600;
+    }
+    
+    /* Info boxes */
+    .info-box {
+        background: rgba(30, 41, 59, 0.8);
+        padding: 1.5rem;
+        border-radius: 12px;
+        border-left: 4px solid #00d4ff;
+        margin: 1rem 0;
+    }
+    
+    /* Texto general */
+    .stMarkdown, .stDataFrame, .stTable {
+        color: #e2e8f0;
+    }
+    
+    h1, h2, h3, h4 {
+        color: #f1f5f9 !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
 st.markdown('<p class="page-header">🤖 Modelo Predictivo XGBoost - Detección de Impagos</p>', unsafe_allow_html=True)
 
-# Ruta de los modelos
-ROOT_DIR = Path(__file__).parent.parent.parent
-MODEL_PATH = ROOT_DIR / "Models" / "Gradient_Boosting" / "Notebook"
+# Ruta de los modelos - usar ruta absoluta correcta
+MODEL_PATH = Path("/workspace/Models/Gradient_Boosting/Notebook")
 
 # Cargar modelo y preprocesadores
 @st.cache_resource

@@ -4,64 +4,134 @@ import sys
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from Streamlit.db_connections import get_sql_connection, get_mongo_connection
+import os
+
+# Agregar el directorio actual al path para importar db_connections
+sys.path.insert(0, str(Path(__file__).parent))
+from db_connections import get_sql_connection, get_mongo_connection
 
 # Configuración de página
 st.set_page_config(
     page_title="CreditFlow Analytics", 
-    page_icon="💳",
+    page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# CSS personalizado
+# CSS personalizado - Tema oscuro profesional
 st.markdown("""
 <style>
+    /* Fondo principal */
+    .stApp {
+        background: linear-gradient(135deg, #0f1419 0%, #1a1f2e 50%, #0d1117 100%);
+    }
+    
+    /* Headers */
     .main-header {
-        font-size: 3rem;
-        font-weight: bold;
-        background: linear-gradient(90deg, #1f77b4, #2ca02c);
+        font-size: 3.5rem;
+        font-weight: 800;
+        background: linear-gradient(90deg, #00d4ff, #7b2cbf, #00d4ff);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
+        background-clip: text;
         text-align: center;
-        padding: 1.5rem 0;
+        padding: 2rem 0;
+        text-shadow: 0 0 30px rgba(0, 212, 255, 0.3);
     }
+    
     .sub-header {
-        font-size: 1.3rem;
-        color: #555;
+        font-size: 1.4rem;
+        color: #a0aec0;
         text-align: center;
-        margin-bottom: 2rem;
+        margin-bottom: 2.5rem;
+        font-weight: 300;
     }
-    .metric-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 1.5rem;
-        border-radius: 15px;
-        color: white;
-        text-align: center;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    
+    /* Tarjetas de métricas */
+    .metric-container {
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%);
+        padding: 1.8rem;
+        border-radius: 16px;
+        border: 1px solid rgba(148, 163, 184, 0.1);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        backdrop-filter: blur(10px);
     }
-    .stMetric {
-        background: white;
-        padding: 1rem;
-        border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    
+    /* Métricas */
+    [data-testid="stMetricValue"] {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: #00d4ff !important;
     }
+    
+    [data-testid="stMetricLabel"] {
+        font-size: 1rem;
+        color: #94a3b8;
+        font-weight: 500;
+    }
+    
+    /* Sidebar */
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%);
+        background: linear-gradient(180deg, #0f1419 0%, #1a202e 100%);
+        border-right: 1px solid rgba(148, 163, 184, 0.1);
+    }
+    
+    /* Contenedores */
+    .info-box {
+        background: rgba(30, 41, 59, 0.8);
+        padding: 1.5rem;
+        border-radius: 12px;
+        border-left: 4px solid #00d4ff;
+        margin: 1rem 0;
+    }
+    
+    /* Texto general */
+    .stMarkdown, .stDataFrame, .stTable {
+        color: #e2e8f0;
+    }
+    
+    /* Títulos de sección */
+    h1, h2, h3, h4 {
+        color: #f1f5f9 !important;
+    }
+    
+    /* Dividers */
+    hr {
+        border-color: rgba(148, 163, 184, 0.2) !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Header principal
-st.markdown('<p class="main-header">💳 CreditFlow Analytics</p>', unsafe_allow_html=True)
+# Header principal con logo SVG embebido
+logo_svg = """
+<svg width="80" height="80" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00d4ff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7b2cbf;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <circle cx="50" cy="50" r="45" fill="url(#grad1)" opacity="0.2"/>
+  <path d="M30 50 L45 65 L70 35" stroke="url(#grad1)" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="30" cy="50" r="4" fill="#00d4ff"/>
+  <circle cx="45" cy="65" r="4" fill="#00d4ff"/>
+  <circle cx="70" cy="35" r="4" fill="#7b2cbf"/>
+</svg>
+"""
+
+col_logo, col_title = st.columns([1, 4])
+with col_logo:
+    st.markdown(logo_svg, unsafe_allow_html=True)
+with col_title:
+    st.markdown('<p class="main-header">CreditFlow Analytics</p>', unsafe_allow_html=True)
+
 st.markdown('<p class="sub-header">Sistema Predictivo de Riesgo Crediticio | Arquitectura Híbrida SQL Server + MongoDB</p>', unsafe_allow_html=True)
 
 # Sidebar
 with st.sidebar:
-    st.image("https://img.icons8.com/color/100/credit-card.png", width=100)
     st.markdown("### 🎯 Navegación")
+    st.markdown("---")
     
-    st.divider()
     st.markdown("### 📊 KPIs en Tiempo Real")
     
     # Conexión a SQL Server para obtener KPIs
@@ -78,52 +148,108 @@ with st.sidebar:
         """
         df_kpis = pd.read_sql(query_kpis, conn)
         
-        with st.container():
-            st.metric("👥 Total Clientes", f"{int(df_kpis['total_clientes'][0]):,}")
-            st.metric("💰 Límite Promedio", f"${df_kpis['avg_limite_credito'][0]:,.2f}")
-            st.metric("📅 Edad Promedio", f"{df_kpis['avg_edad'][0]:.1f} años")
-            st.metric("⚠️ Tasa Incumplimiento", f"{df_kpis['tasa_incumplimiento'][0]:.2f}%")
+        st.markdown('<div class="metric-container">', unsafe_allow_html=True)
+        st.metric("👥 Total Clientes", f"{int(df_kpis['total_clientes'][0]):,}")
+        st.metric("💰 Límite Promedio", f"${df_kpis['avg_limite_credito'][0]:,.2f}")
+        st.metric("📅 Edad Promedio", f"{df_kpis['avg_edad'][0]:.1f} años")
+        st.metric("⚠️ Tasa Incumplimiento", f"{df_kpis['tasa_incumplimiento'][0]:.2f}%")
+        st.markdown('</div>', unsafe_allow_html=True)
         
         conn.close()
     except Exception as e:
         st.error(f"Error al cargar KPIs: {str(e)}")
     
-    st.divider()
+    st.markdown("---")
     st.markdown("### ℹ️ Acerca del Proyecto")
-    st.info("""
-    **Objetivo:** Diseñar una solución analítica integral que combine arquitectura de persistencia híbrida con modelos de Machine Learning para predecir impagos crediticios.
     
-    **Tecnologías:**
-    - SQL Server: Base de datos relacional normalizada
-    - MongoDB: Registro de experimentos ML
-    - XGBoost: Modelo predictivo
-    - Streamlit: Dashboard interactivo
-    """)
+    with st.expander("Ver detalles del proyecto", expanded=False):
+        st.markdown("""
+        **Objetivo General:**
+        Diseñar e implementar una solución analítica integral que combine arquitectura de persistencia híbrida con modelos de ML.
+        
+        **Tecnologías:**
+        - 🗄️ SQL Server: BD relacional normalizada
+        - 📄 MongoDB: Registro de experimentos ML
+        - 🤖 XGBoost: Modelo predictivo
+        - 📊 Streamlit: Dashboard interactivo
+        
+        **Características:**
+        - ✅ Normalización 3NF
+        - ✅ Índices optimizados
+        - ✅ Triggers de auditoría
+        - ✅ Roles diferenciados
+        - ✅ Strategy de backups
+        """)
     
-    st.divider()
-    st.caption("🔗 Conexiones Activas:")
-    st.success("✅ SQL Server")
-    st.success("✅ MongoDB")
+    st.markdown("---")
+    st.markdown("### 🔗 Estado de Conexiones")
+    
+    # Verificar SQL Server
+    sql_ok = False
+    mongo_ok = False
+    
+    try:
+        conn = get_sql_connection()
+        conn.close()
+        sql_ok = True
+    except:
+        pass
+    
+    try:
+        client = get_mongo_connection()
+        client.admin.command('ping')
+        mongo_ok = True
+    except:
+        pass
+    
+    if sql_ok:
+        st.success("✅ SQL Server")
+    else:
+        st.error("❌ SQL Server")
+    
+    if mongo_ok:
+        st.success("✅ MongoDB")
+    else:
+        st.error("❌ MongoDB")
 
 # Contenido principal - Dashboard general
-st.divider()
+st.markdown("---")
 
-col1, col2, col3 = st.columns(3)
+# KPIs principales en columnas
+col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
 
-with col1:
-    st.markdown("""
-    ### 🎯 Objetivos del Proyecto
+try:
+    conn = get_sql_connection()
+    query_kpis = """
+        SELECT 
+            COUNT(DISTINCT c.id_cliente) AS total_clientes,
+            AVG(c.limite_credito) AS avg_limite_credito,
+            AVG(c.edad) AS avg_edad,
+            SUM(r.incumplimiento_proximo_mes) * 100.0 / COUNT(*) AS tasa_incumplimiento
+        FROM dim_cliente c
+        INNER JOIN riesgo_crediticio r ON c.id_cliente = r.id_cliente
+    """
+    df_kpis = pd.read_sql(query_kpis, conn)
     
-    1. **Arquitectura Híbrida:** Implementar repositorio relacional en SQL Server con integración NoSQL en MongoDB
+    with col_kpi1:
+        st.metric("👥 Total Clientes", f"{int(df_kpis['total_clientes'][0]):,}")
+    with col_kpi2:
+        st.metric("💰 Límite Promedio", f"${df_kpis['avg_limite_credito'][0]:,.2f}")
+    with col_kpi3:
+        st.metric("📅 Edad Promedio", f"{df_kpis['avg_edad'][0]:.1f} años")
+    with col_kpi4:
+        st.metric("⚠️ Tasa Incumplimiento", f"{df_kpis['tasa_incumplimiento'][0]:.2f}%")
     
-    2. **Machine Learning:** Desarrollar pipeline de preparación de datos y modelos supervisados/no supervisados
-    
-    3. **Seguridad:** Garantizar auditoría mediante triggers y plan de recuperación ante desastres
-    
-    4. **Despliegue:** Dashboard interactivo en tiempo real con predicciones ML
-    """)
+    conn.close()
+except Exception as e:
+    st.error(f"Error al cargar KPIs: {str(e)}")
 
-with col2:
+st.markdown("---")
+
+# Gráficos principales
+col_graf1, col_graf2 = st.columns(2)
+
+with col_graf1:
     try:
         conn = get_sql_connection()
         
@@ -139,15 +265,21 @@ with col2:
         
         fig_pie = px.pie(df_edu, values='cantidad', names='nivel_educativo', 
                          title='📚 Distribución por Nivel Educativo',
-                         color_discrete_sequence=px.colors.sequential.Blues)
+                         color_discrete_sequence=['#00d4ff', '#7b2cbf', '#2ca02c', '#ff7f0e', '#e377c2'])
         fig_pie.update_traces(textposition='inside', textinfo='percent+label')
+        fig_pie.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='#e2e8f0', size=12),
+            title_font=dict(color='#00d4ff', size=16)
+        )
         st.plotly_chart(fig_pie, use_container_width=True)
         
         conn.close()
     except Exception as e:
         st.error(f"Error al cargar gráfico educativo: {str(e)}")
 
-with col3:
+with col_graf2:
     try:
         conn = get_sql_connection()
         
@@ -163,8 +295,15 @@ with col3:
         fig_bar = px.bar(df_civil, x='descripcion_estado_civil', y='cantidad',
                          title='💍 Distribución por Estado Civil',
                          color='cantidad',
-                         color_continuous_scale='Viridis')
-        fig_bar.update_layout(xaxis_title="Estado Civil", yaxis_title="Cantidad")
+                         color_continuous_scale=['#00d4ff', '#7b2cbf'])
+        fig_bar.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='#e2e8f0', size=12),
+            title_font=dict(color='#00d4ff', size=16),
+            xaxis=dict(title="Estado Civil", tickfont=dict(color='#94a3b8')),
+            yaxis=dict(title="Cantidad", tickfont=dict(color='#94a3b8'))
+        )
         st.plotly_chart(fig_bar, use_container_width=True)
         
         conn.close()
@@ -172,13 +311,14 @@ with col3:
         st.error(f"Error al cargar gráfico estado civil: {str(e)}")
 
 # Sección de arquitectura
-st.divider()
+st.markdown("---")
 st.markdown("### 🏗️ Arquitectura del Sistema")
 
 col_arch1, col_arch2 = st.columns(2)
 
 with col_arch1:
     st.markdown("""
+    <div class="info-box">
     #### 📦 Base de Datos Relacional (SQL Server)
     
     **Tablas Principales:**
@@ -195,10 +335,12 @@ with col_arch1:
     - ✅ Triggers de auditoría
     - ✅ Roles diferenciados (analista/admin)
     - ✅ Strategy de backups (Full/Diff/Log)
-    """)
+    </div>
+    """, unsafe_allow_html=True)
 
 with col_arch2:
     st.markdown("""
+    <div class="info-box">
     #### 📄 Base de Datos Documental (MongoDB)
     
     **Colección:** `experimentos_ml`
@@ -226,13 +368,14 @@ with col_arch2:
     - ✅ Tracking de experimentos
     - ✅ Comparación de modelos
     - ✅ Reproducibilidad
-    """)
+    </div>
+    """, unsafe_allow_html=True)
 
 # Footer
-st.divider()
+st.markdown("---")
 st.markdown("""
-<div style='text-align: center; color: #666; padding: 2rem;'>
-    <h4>CreditFlow Analytics © 2025</h4>
+<div style='text-align: center; color: #64748b; padding: 2rem;'>
+    <h4 style='color: #00d4ff;'>CreditFlow Analytics © 2025</h4>
     <p>Proyecto Académico de Machine Learning & Bases de Datos</p>
     <p><small>Arquitectura Híbrida SQL Server + MongoDB | UCI Default of Credit Card Clients Dataset</small></p>
 </div>
