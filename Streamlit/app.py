@@ -128,92 +128,27 @@ with col_title:
 
 st.markdown('<p class="sub-header">Sistema Predictivo de Riesgo Crediticio | Arquitectura Híbrida SQL Server + MongoDB</p>', unsafe_allow_html=True)
 
-# Sidebar
+# Sidebar simplificado
 with st.sidebar:
     st.markdown("### 🎯 Navegación")
     st.markdown("---")
     
-    st.markdown("### 📊 KPIs en Tiempo Real")
-    
-    # Conexión a SQL Server para obtener KPIs usando SQLAlchemy
-    try:
-        conn = get_sql_connection()
-        engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
-        
-        query_kpis = text("""
-            SELECT 
-                COUNT(DISTINCT c.id_cliente) AS total_clientes,
-                AVG(c.limite_credito) AS avg_limite_credito,
-                AVG(c.edad) AS avg_edad,
-                SUM(CAST(r.incumplimiento_proximo_mes AS INT)) * 100.0 / COUNT(*) AS tasa_incumplimiento
-            FROM dim_cliente c
-            INNER JOIN riesgo_crediticio r ON c.id_cliente = r.id_cliente
-        """)
-        df_kpis = pd.read_sql(query_kpis, engine)
-        
-        st.markdown('<div class="metric-container">', unsafe_allow_html=True)
-        st.metric("👥 Total Clientes", f"{int(df_kpis['total_clientes'][0]):,}")
-        st.metric("💰 Límite Promedio", f"${df_kpis['avg_limite_credito'][0]:,.2f}")
-        st.metric("📅 Edad Promedio", f"{df_kpis['avg_edad'][0]:.1f} años")
-        st.metric("⚠️ Tasa Incumplimiento", f"{df_kpis['tasa_incumplimiento'][0]:.2f}%")
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-        conn.close()
-    except Exception as e:
-        st.error(f"Error al cargar KPIs: {str(e)}")
+    st.markdown("""
+    - **📊 Dashboard**: Vista general del proyecto
+    - **📑 Dataset & Arquitectura**: Exploración de datos y modelo ER
+    - **🤖 Modelo ML & Predicciones**: Interfaz predictiva en tiempo real
+    - **🛠️ Administración BD**: Gestión de usuarios, auditoría y backups
+    """)
     
     st.markdown("---")
     st.markdown("### ℹ️ Acerca del Proyecto")
     
-    with st.expander("Ver detalles del proyecto", expanded=False):
+    with st.expander("Ver detalles", expanded=False):
         st.markdown("""
-        **Objetivo General:**
-        Diseñar e implementar una solución analítica integral que combine arquitectura de persistencia híbrida con modelos de ML.
+        **Objetivo:** Diseñar e implementar una solución analítica integral que combine arquitectura híbrida con modelos ML.
         
-        **Tecnologías:**
-        - 🗄️ SQL Server: BD relacional normalizada
-        - 📄 MongoDB: Registro de experimentos ML
-        - 🤖 XGBoost: Modelo predictivo
-        - 📊 Streamlit: Dashboard interactivo
-        
-        **Características:**
-        - ✅ Normalización 3NF
-        - ✅ Índices optimizados
-        - ✅ Triggers de auditoría
-        - ✅ Roles diferenciados
-        - ✅ Strategy de backups
+        **Tecnologías:** SQL Server | MongoDB | XGBoost | Streamlit
         """)
-    
-    st.markdown("---")
-    st.markdown("### 🔗 Estado de Conexiones")
-    
-    # Verificar SQL Server
-    sql_ok = False
-    mongo_ok = False
-    
-    try:
-        conn = get_sql_connection()
-        conn.close()
-        sql_ok = True
-    except:
-        pass
-    
-    try:
-        client = get_mongo_connection()
-        client.admin.command('ping')
-        mongo_ok = True
-    except:
-        pass
-    
-    if sql_ok:
-        st.success("✅ SQL Server")
-    else:
-        st.error("❌ SQL Server")
-    
-    if mongo_ok:
-        st.success("✅ MongoDB")
-    else:
-        st.error("❌ MongoDB")
 
 # Contenido principal - Dashboard general
 st.markdown("---")
@@ -317,73 +252,6 @@ with col_graf2:
     except Exception as e:
         st.error(f"Error al cargar gráfico estado civil: {str(e)}")
 
-# Sección de arquitectura
+# Footer simplificado
 st.markdown("---")
-st.markdown("### 🏗️ Arquitectura del Sistema")
-
-col_arch1, col_arch2 = st.columns(2)
-
-with col_arch1:
-    st.markdown("""
-    <div class="info-box">
-    #### 📦 Base de Datos Relacional (SQL Server)
-    
-    **Tablas Principales:**
-    - `dim_cliente`: Información demográfica de clientes
-    - `dim_sexo`, `dim_educacion`, `dim_estado_civil`: Catálogos normalizados
-    - `historial_pagos`: Historial transaccional de 6 meses
-    - `riesgo_crediticio`: Variable objetivo (target)
-    - `auditoria_cambios`: Tabla de auditoría con triggers
-    
-    **Características:**
-    - ✅ Normalización 3NF
-    - ✅ Índices clustered/non-clustered
-    - ✅ Vistas optimizadas para ML
-    - ✅ Triggers de auditoría
-    - ✅ Roles diferenciados (analista/admin)
-    - ✅ Strategy de backups (Full/Diff/Log)
-    </div>
-    """, unsafe_allow_html=True)
-
-with col_arch2:
-    st.markdown("""
-    <div class="info-box">
-    #### 📄 Base de Datos Documental (MongoDB)
-    
-    **Colección:** `experimentos_ml`
-    
-    **Documentos almacenados:**
-    ```json
-    {
-        "fecha": "ISODate",
-        "algoritmo": "XGBoost",
-        "hiperparametros": {
-            "n_estimators": 100,
-            "max_depth": 5,
-            "learning_rate": 0.1
-        },
-        "metricas": {
-            "accuracy": 0.82,
-            "precision": 0.78,
-            "recall": 0.75,
-            "f1_score": 0.76
-        }
-    }
-    ```
-    
-    **Propósito:**
-    - ✅ Tracking de experimentos
-    - ✅ Comparación de modelos
-    - ✅ Reproducibilidad
-    </div>
-    """, unsafe_allow_html=True)
-
-# Footer
-st.markdown("---")
-st.markdown("""
-<div style='text-align: center; color: #64748b; padding: 2rem;'>
-    <h4 style='color: #00d4ff;'>CreditFlow Analytics © 2025</h4>
-    <p>Proyecto Académico de Machine Learning & Bases de Datos</p>
-    <p><small>Arquitectura Híbrida SQL Server + MongoDB | UCI Default of Credit Card Clients Dataset</small></p>
-</div>
-""", unsafe_allow_html=True)
+st.markdown("<div style='text-align: center; color: #64748b; padding: 1rem;'><small>CreditFlow Analytics © 2025 | Arquitectura Híbrida SQL Server + MongoDB</small></div>", unsafe_allow_html=True)
