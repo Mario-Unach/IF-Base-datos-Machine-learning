@@ -3,7 +3,7 @@ numpy
 jupyter
 matplotlib
 seaborn
-scikit-learn
+scikit-learn==1.9.0
 xgboost
 lightgbm
 openpyxl
