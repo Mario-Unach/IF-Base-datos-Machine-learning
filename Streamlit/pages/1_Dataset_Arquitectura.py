@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 import sys
 from pathlib import Path
 from sqlalchemy import create_engine, text
+from streamlit_mermaid import st_mermaid
 
 # Agregar el directorio Streamlit al path para importar db_connections
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -138,75 +139,62 @@ with tab1:
 with tab2:
     st.markdown("### 🏗️ Modelo Entidad-Relación Normalizado")
     
-    # Diagrama ER usando Mermaid
+    # Diagrama ER - Sin los backticks de markdown
     er_diagram = """
-erDiagram
-    dim_estado_civil {
-        int id_estado_civil PK
-        varchar descripcion_estado_civil
-    }
-
-    dim_sexo {
-        int id_sexo PK
-        varchar descripcion_sexo
-    }
-
-    dim_educacion {
-        int id_educacion PK
-        varchar nivel_educativo
-    }
-
-    dim_cliente {
-        int id_cliente PK
-        int id_sexo FK
-        int id_educacion FK
-        int id_estado_civil FK
-        int edad
-        float limite_credito
-    }
-
-    riesgo_crediticio {
-        int id_cliente PK,FK
-        int incumplimiento_proximo_mes
-    }
-
-    dim_estatus_pago {
-        int id_estatus PK
-        varchar descripcion_estatus
-    }
-
-    dim_tiempo_mes {
-        int id_mes PK
-        varchar mes_referencia
-        int orden_historial
-    }
-
-    historial_pagos {
-        int id_historial PK
-        int id_cliente FK
-        int id_mes FK
-        int id_estatus_pago FK
-        float monto_estado_cuenta
-        float monto_pago_anterior
-    }
-
-    dim_estado_civil ||--o{ dim_cliente : "tiene"
-    dim_sexo ||--o{ dim_cliente : "tiene"
-    dim_educacion ||--o{ dim_cliente : "tiene"
-    dim_cliente ||--o| riesgo_crediticio : "posee"
-    dim_cliente ||--o{ historial_pagos : "realiza"
-    dim_estatus_pago ||--o{ historial_pagos : "clasifica"
-    dim_tiempo_mes ||--o{ historial_pagos : "registra"
-    \"\"\"
+    erDiagram
+        dim_estado_civil {
+            int id_estado_civil PK
+            varchar descripcion_estado_civil
+        }
+        dim_sexo {
+            int id_sexo PK
+            varchar descripcion_sexo
+        }
+        dim_educacion {
+            int id_educacion PK
+            varchar nivel_educativo
+        }
+        dim_cliente {
+            int id_cliente PK
+            int id_sexo FK
+            int id_educacion FK
+            int id_estado_civil FK
+            int edad
+            float limite_credito
+        }
+        riesgo_crediticio {
+            int id_cliente FK
+            int incumplimiento_proximo_mes
+        }
+        dim_estatus_pago {
+            int id_estatus PK
+            varchar descripcion_estatus
+        }
+        dim_tiempo_mes {
+            int id_mes PK
+            varchar mes_referencia
+            int orden_historial
+        }
+        historial_pagos {
+            int id_historial PK
+            int id_cliente FK
+            int id_mes FK
+            int id_estatus_pago FK
+            float monto_estado_cuenta
+            float monto_pago_anterior
+        }
+        dim_estado_civil ||--o{ dim_cliente : "tiene"
+        dim_sexo ||--o{ dim_cliente : "tiene"
+        dim_educacion ||--o{ dim_cliente : "tiene"
+        dim_cliente ||--o| riesgo_crediticio : "posee"
+        dim_cliente ||--o{ historial_pagos : "realiza"
+        dim_estatus_pago ||--o{ historial_pagos : "clasifica"
+        dim_tiempo_mes ||--o{ historial_pagos : "registra"
+    """
     
-    # Renderizar diagrama Mermaid correctamente
-    st.markdown(f'''
-    <div style="background: rgba(30, 41, 59, 0.4); padding: 20px; border-radius: 10px; border: 1px solid rgba(0, 212, 255, 0.2);">
-    ```mermaid
-    {er_diagram.strip()}
-    ```
-    </div>
-    ''', unsafe_allow_html=True)
+    # Usar st_mermaid en lugar de st.markdown
+    with st.container(border=True):
+        st_mermaid(er_diagram)
 
 with tab3:
     st.markdown("### 📈 Visualizaciones Avanzadas del Dataset")
