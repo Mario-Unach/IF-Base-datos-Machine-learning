@@ -10,3 +10,4 @@ openpyxl
 pymongo
 joblib
 streamlit
+plotly
