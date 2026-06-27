@@ -3,12 +3,13 @@ import pymongo
 import streamlit as st
 
 def get_sql_connection():
-    # Ajusta el DRIVER según tu versión de ODBC instalada en Windows
+    # Para Linux, usa autenticación SQL (no Trusted_Connection)
     conn_str = (
         "DRIVER={ODBC Driver 17 for SQL Server};"
-        "SERVER=localhost;"
-        "DATABASE=CreditCardDefault;" # Cambia al nombre real de tu BD en SQL Server
-        "Trusted_Connection=yes;"
+        "SERVER=localhost,1433;"  # Especifica el puerto
+        "DATABASE=CreditCardDefault;"
+        "UID=sa;"
+        "PWD=Soymario.7;"  # La misma contraseña que en tu docker-compose
     )
     try:
         return pyodbc.connect(conn_str)
