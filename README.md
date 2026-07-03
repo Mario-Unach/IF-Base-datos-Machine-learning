@@ -32,7 +32,7 @@
 |---------------------------------------------------|---------------------------------------------------------------|------------------------------------------------------|
 | **Lenin Lopez**                                   | Base de datos SQL (modelado, índices, vistas, triggers, DRP)  | `SQL` `modelado` `seguridad`                         |
 | **Brayan Cardenas**                               | Base de datos SQL (población, backups, roles, MongoDB)        | `SQL` `MongoDB` `backups`                            |
-| **Dennis Sanches**                                | Machine Learning – Random Forest                              | `ML` `RandomForest` `supervisado`                    |
+| **Dennis Sanchez**                                | Machine Learning – Random Forest                              | `ML` `RandomForest` `supervisado`                    |
 | **Dennis Becerra**                                | Machine Learning – Red Neuronal (MLP)                         | `ML` `RedNeuronal` `deep learning`                   |
 | **Mario Camacho**                                 | Machine Learning – Gradient Boosting (XGBoost/LightGBM)       | `ML` `GradientBoosting` `supervisado`                |
 
