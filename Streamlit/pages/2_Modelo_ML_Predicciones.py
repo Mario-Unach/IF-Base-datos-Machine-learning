@@ -2,542 +2,467 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
-from pathlib import Path
-import sys
-import plotly.graph_objects as go
 import plotly.express as px
-from streamlit_mermaid import st_mermaid
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
+import os
+import sys
 
-# Agregar el directorio Streamlit al path para importar db_connections
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from db_connections import get_sql_connection, get_mongo_connection
-from datetime import datetime
+# Agregar la ruta raíz al path para importar db_connections
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Configuración de página
 st.set_page_config(
-    page_title="Modelo ML & Predicciones",
+    page_title="Modelos ML - Predicciones",
     page_icon="🤖",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# CSS personalizado - Tema oscuro consistente
-st.markdown("""
-<style>
-    /* Fondo principal */
-    .stApp {
-        background: linear-gradient(135deg, #0f1419 0%, #1a1f2e 50%, #0d1117 100%);
-    }
-    
-    /* Header de página */
-    .page-header {
-        font-size: 2.8rem;
-        font-weight: 800;
-        background: linear-gradient(90deg, #00d4ff, #7b2cbf);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        padding: 1.5rem 0;
-        margin-bottom: 2rem;
-    }
-    
-    /* Formulario */
-    .stForm {
-        background: rgba(30, 41, 59, 0.6);
-        padding: 2rem;
-        border-radius: 16px;
-        border: 1px solid rgba(148, 163, 184, 0.1);
-    }
-    
-    /* Resultado de predicción */
-    .prediction-result {
-        padding: 2.5rem;
-        border-radius: 20px;
-        text-align: center;
-        font-size: 2rem;
-        font-weight: 800;
-        margin: 2rem 0;
-        backdrop-filter: blur(10px);
-    }
-    .risk-low {
-        background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.3) 100%);
-        color: #34d399;
-        border: 2px solid #10b981;
-        box-shadow: 0 8px 32px rgba(16, 185, 129, 0.3);
-    }
-    .risk-high {
-        background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(220, 38, 38, 0.3) 100%);
-        color: #f87171;
-        border: 2px solid #ef4444;
-        box-shadow: 0 8px 32px rgba(239, 68, 68, 0.3);
-    }
-    
-    /* Sliders */
-    .stSlider label {
-        color: #e2e8f0 !important;
-        font-weight: 600;
-    }
-    
-    /* Selectbox */
-    .stSelectbox label {
-        color: #e2e8f0 !important;
-        font-weight: 600;
-    }
-    
-    /* Info boxes */
-    .info-box {
-        background: rgba(30, 41, 59, 0.8);
-        padding: 1.5rem;
-        border-radius: 12px;
-        border-left: 4px solid #00d4ff;
-        margin: 1rem 0;
-    }
-    
-    /* Texto general */
-    .stMarkdown, .stDataFrame, .stTable {
-        color: #e2e8f0;
-    }
-    
-    h1, h2, h3, h4 {
-        color: #f1f5f9 !important;
-    }
-</style>
-""", unsafe_allow_html=True)
+# CORRECCIÓN DE RUTAS - Navegar correctamente en la estructura
+# 2_Modelo_ML_Predicciones.py está en: Streamlit/pages/
+# Necesitamos subir 2 niveles para llegar a la raíz del proyecto
+current_file = os.path.abspath(__file__)  # Ruta del archivo actual
+pages_dir = os.path.dirname(current_file)  # Streamlit/pages/
+streamlit_dir = os.path.dirname(pages_dir)  # Streamlit/
+ROOT_DIR = os.path.dirname(streamlit_dir)  # Carpeta raíz del proyecto
 
-st.markdown('<p class="page-header">🤖 Modelo Predictivo XGBoost - Detección de Impagos</p>', unsafe_allow_html=True)
+# Ahora construir las rutas correctas
+KMEANS_MODEL_PATH = os.path.join(ROOT_DIR, "Models", "K-Means", "kmeans_model.pkl")
+KMEANS_SCALER_PATH = os.path.join(ROOT_DIR, "Models", "K-Means", "scaler.pkl")
+KMEANS_CENTERS_PATH = os.path.join(ROOT_DIR, "Models", "K-Means", "cluster_centers.pkl")
+RF_MODEL_PATH = os.path.join(ROOT_DIR, "Models", "Random_Forest", "random_forest_optimizado.pkl")
+RF_SCALER_PATH = os.path.join(ROOT_DIR, "Models", "Random_Forest", "scaler.pkl")
+RF_FEATURES_PATH = os.path.join(ROOT_DIR, "Models", "Random_Forest", "feature_names.pkl")
+DATASET_PATH = os.path.join(ROOT_DIR, "Dataset", "default of credit card clients.csv")
 
-# Ruta de los modelos - usar ruta absoluta correcta desde el directorio raíz del workspace
-MODEL_PATH = Path("Models/Gradient_Boosting/Notebook")
-
-# Verificar que los archivos existen antes de cargar
-required_files = ["xgb_model.pkl", "scaler.pkl", "columns.pkl", "medians.pkl"]
-missing_files = [f for f in required_files if not (MODEL_PATH / f).exists()]
-
-if missing_files:
-    st.error(f"""
-    ❌ **Archivos del modelo no encontrados:**
-    
-    Faltan los siguientes archivos en `{MODEL_PATH}`:
-    {', '.join(missing_files)}
-    
-    💡 **Solución:** 
-    1. Verifica que el notebook de entrenamiento se haya ejecutado correctamente
-    2. Los archivos deben estar en: `Models/Gradient_Boosting/Notebook/`
-    """)
-    st.stop()
-
-# Cargar modelo y preprocesadores
+# Cargar modelos con cache
 @st.cache_resource
-def load_model_artifacts():
+def load_kmeans_models():
+    """Carga los modelos K-Means"""
     try:
-        model = joblib.load(MODEL_PATH / "xgb_model.pkl")
-        scaler = joblib.load(MODEL_PATH / "scaler.pkl")
-        columns = joblib.load(MODEL_PATH / "columns.pkl")
-        medians = joblib.load(MODEL_PATH / "medians.pkl")
-        return model, scaler, columns, medians, None
-    except Exception as e:
-        return None, None, None, None, str(e)
+        kmeans = joblib.load(KMEANS_MODEL_PATH)
+        scaler = joblib.load(KMEANS_SCALER_PATH)
+        centers = joblib.load(KMEANS_CENTERS_PATH)
+        return kmeans, scaler, centers
+    except FileNotFoundError as e:
+        st.error(f"❌ Error cargando modelos K-Means: {e}")
+        return None, None, None
 
-model, scaler, columns, medians, error = load_model_artifacts()
+@st.cache_resource
+def load_rf_models():
+    """Carga los modelos Random Forest"""
+    try:
+        rf_model = joblib.load(RF_MODEL_PATH)
+        rf_scaler = joblib.load(RF_SCALER_PATH)
+        rf_features = joblib.load(RF_FEATURES_PATH)
+        return rf_model, rf_scaler, rf_features
+    except FileNotFoundError as e:
+        st.error(f"❌ Error cargando modelos Random Forest: {e}")
+        return None, None, None
 
-if error:
-    st.error(f"""
-    ❌ **Error crítico al cargar artefactos del modelo:**
-    
-    ```
-    {error}
-    ```
-    
-    💡 **Solución:** Ejecuta primero el notebook de entrenamiento para generar los archivos del modelo en:
-    `Models/Gradient_Boosting/Notebook/`
-    
-    Los archivos requeridos son:
-    - xgb_model.pkl
-    - scaler.pkl
-    - columns.pkl
-    - medians.pkl
-    """)
+@st.cache_data
+def load_dataset():
+    """Carga el dataset"""
+    try:
+        df = pd.read_csv(DATASET_PATH, header=1)
+        return df
+    except FileNotFoundError:
+        st.error(f"❌ No se encontró el dataset en {DATASET_PATH}")
+        return None
+
+# Título principal
+st.title("🤖 Modelos de Machine Learning - Predicciones")
+st.markdown("---")
+
+# Cargar datos y modelos
+df = load_dataset()
+kmeans_model, kmeans_scaler, kmeans_centers = load_kmeans_models()
+rf_model, rf_scaler, rf_features = load_rf_models()
+
+if df is None or kmeans_model is None or rf_model is None:
     st.stop()
 
-# Sidebar con información del modelo
-with st.sidebar:
-    st.image("https://img.icons8.com/color/100/robot.png", width=100)
-    st.markdown("### ℹ️ Información del Modelo")
-    
-    st.info("""
-    **Algoritmo:** XGBoost Classifier
-    
-    **Objetivo:** Predecir probabilidad de impago crediticio en el próximo mes
-    
-    **Dataset:** UCI Default of Credit Card Clients
-    
-    **Métricas del Modelo:**
-    - Accuracy: ~82%
-    - Precision: ~78%
-    - Recall: ~75%
-    - F1-Score: ~76%
-    """)
-    
-    st.divider()
-    st.markdown("### 🎯 Features del Modelo")
-    st.caption("""
-    El modelo utiliza 23 variables:
-    - Límite de crédito
-    - Edad
-    - Historial de pagos (6 meses)
-    - Montos facturados (6 meses)
-    - Pagos realizados (6 meses)
-    """)
+# Sidebar para selección de modelo
+st.sidebar.header("⚙️ Configuración")
+model_choice = st.sidebar.selectbox(
+    "Selecciona el Modelo",
+    ["K-Means (Clustering)", "Random Forest (Clasificación)"]
+)
 
-# Pestañas principales
-tab1, tab2, tab3 = st.tabs([
-    "🔮 Predicción en Tiempo Real",
-    "📊 Evaluación del Modelo",
-    "🧪 Experimentos en MongoDB"
-])
+# Preparar datos según el modelo seleccionado
+if model_choice == "K-Means (Clustering)":
+    # K-Means: eliminar ID y target
+    features_to_drop = ['ID', 'default payment next month']
+    X = df.drop(columns=features_to_drop, errors='ignore')
+    X_scaled = kmeans_scaler.transform(X.values)
+    df['Cluster'] = kmeans_model.predict(X_scaled)
+    
+if model_choice == "Random Forest (Clasificación)":
+    # Obtener los nombres reales de las columnas (excluyendo 'ID')
+    real_feature_names = [col for col in df.columns if col != 'ID']
+    
+    # Crear mapeo si rf_features tiene nombres genéricos como 'X0', 'X1', etc.
+    if rf_features and rf_features[0].startswith('X'):
+        feature_mapping = {f'X{i}': name for i, name in enumerate(real_feature_names)}
+        # Mapear los nombres en feature_importance
+        feature_importance['Feature'] = feature_importance['Feature'].map(
+            lambda x: feature_mapping.get(x, x)
+        )
+    
+    # Usar DataFrame con nombres de columnas correctos para el transform
+    X = df.drop(columns=['ID'], errors='ignore')
+    # Renombrar columnas si es necesario para que coincidan con lo que espera el scaler
+    if hasattr(rf_scaler, 'feature_names_in_'):
+        expected_names = rf_scaler.feature_names_in_
+        # Asegurarse de que X tenga los nombres esperados
+        if list(X.columns) != list(expected_names):
+            X.columns = expected_names
+    X_scaled = rf_scaler.transform(X)
+
+# Tabs para diferentes funcionalidades
+tab1, tab2, tab3 = st.tabs(["📊 Análisis del Modelo", "🔮 Predicción Individual", "📈 Visualización"])
 
 with tab1:
-    st.markdown("### 📝 Formulario de Predicción")
-    st.info("💡 Ingresa los datos del cliente para obtener una predicción en tiempo real")
-    
-    # Crear formulario organizado por secciones
-    with st.form("prediction_form", clear_on_submit=False):
-        st.markdown("#### 👤 Datos Demográficos")
+    if model_choice == "K-Means (Clustering)":
+        st.header("📊 Análisis de Clusters con K-Means")
         
-        col_demo1, col_demo2, col_demo3 = st.columns(3)
+        # Métricas
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total de Clientes", len(df))
+        with col2:
+            st.metric("Número de Clusters", kmeans_model.n_clusters)
+        with col3:
+            default_rate = df['default payment next month'].mean() * 100
+            st.metric("Tasa Default Global", f"{default_rate:.2f}%")
         
-        with col_demo1:
-            limite_credito = st.number_input(
-                "💰 Límite de Crédito ($)",
-                min_value=0.0,
-                max_value=1000000.0,
-                value=50000.0,
-                step=1000.0
-            )
+        # Perfil de clusters
+        st.subheader("Perfil de Clusters")
+        key_vars = ['LIMIT_BAL', 'AGE', 'PAY_0', 'BILL_AMT1', 'PAY_AMT1', 'default payment next month']
+        cluster_profile = df.groupby('Cluster')[key_vars].mean()
+        default_rate_cluster = df.groupby('Cluster')['default payment next month'].mean() * 100
+        cluster_profile['Tasa_Default_%'] = default_rate_cluster
         
-        with col_demo2:
-            edad = st.number_input(
-                "📅 Edad",
-                min_value=18,
-                max_value=100,
-                value=30,
-                step=1
-            )
+        st.dataframe(cluster_profile.round(2), use_container_width=True)
         
-        with col_demo3:
-            sexo = st.selectbox(
-                "👤 Sexo",
-                options=[1, 2],
-                format_func=lambda x: "Masculino" if x == 1 else "Femenino"
-            )
-        
-        educacion = st.selectbox(
-            "📚 Nivel Educativo",
-            options=[0, 1, 2, 3, 4, 5, 6],
-            format_func=lambda x: {
-                0: "Sin Instrucción",
-                1: "Posgrado",
-                2: "Universidad",
-                3: "Bachillerato",
-                4: "Otros",
-                5: "Desconocido",
-                6: "Desconocido"
-            }[x]
+        # Gráfico de tasa de default por cluster
+        fig = px.bar(
+            cluster_profile.reset_index(),
+            x='Cluster',
+            y='Tasa_Default_%',
+            title='Tasa de Impago por Cluster',
+            color='Cluster',
+            color_continuous_scale='Viridis'
         )
+        st.plotly_chart(fig, use_container_width=True)
         
-        estado_civil = st.selectbox(
-            "💍 Estado Civil",
-            options=[0, 1, 2, 3],
-            format_func=lambda x: {
-                0: "Desconocido",
-                1: "Casado",
-                2: "Soltero",
-                3: "Otros"
-            }[x]
+    else:  # Random Forest
+        st.header("📊 Análisis de Random Forest")
+        
+        # Predicciones en el dataset completo
+        y_true = df['default payment next month']
+        y_pred = rf_model.predict(X_scaled)
+        
+        # Métricas del modelo
+        st.subheader("Métricas del Modelo")
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            accuracy = accuracy_score(y_true, y_pred)
+            st.metric("Accuracy", f"{accuracy:.4f}")
+        with col2:
+            precision = precision_score(y_true, y_pred)
+            st.metric("Precision", f"{precision:.4f}")
+        with col3:
+            recall = recall_score(y_true, y_pred)
+            st.metric("Recall", f"{recall:.4f}")
+        with col4:
+            f1 = f1_score(y_true, y_pred)
+            st.metric("F1-Score", f"{f1:.4f}")
+        
+        # Matriz de confusión
+        st.subheader("Matriz de Confusión")
+        cm = confusion_matrix(y_true, y_pred)
+        fig_cm = px.imshow(
+            cm,
+            text_auto=True,
+            aspect="auto",
+            title="Matriz de Confusión",
+            labels=dict(x="Predicho", y="Real", color="Cantidad"),
+            x=["No Default", "Default"],
+            y=["No Default", "Default"],
+            color_continuous_scale='Blues'
         )
+        st.plotly_chart(fig_cm, use_container_width=True)
         
-        st.divider()
-        st.markdown("#### 📜 Historial de Pagos (Meses 1-6)")
-        st.caption("PAY_0 = Mes actual, PAY_2-PAY_6 = Meses anteriores (-1: pago puntual, 0: mínimo, 1-9: meses de retraso)")
+        # Importancia de características
+        st.subheader("Importancia de Características")
+
+        # Usamos las columnas del DataFrame X que se usó para el escalado.
+        # Esto garantiza que la longitud coincida exactamente con la del modelo.
+        feature_names = X.columns.tolist()
+
+        feature_importance = pd.DataFrame({
+            'Feature': feature_names,
+            'Importance': rf_model.feature_importances_
+        }).sort_values('Importance', ascending=False)
+
+        fig_imp = px.bar(
+            feature_importance.head(15),
+            x='Importance',
+            y='Feature',
+            orientation='h',
+            title='Top 15 Características Más Importantes',
+            color='Importance',
+            color_continuous_scale='Viridis'
+        )
+        fig_imp.update_layout(yaxis={'categoryorder': 'total ascending'})
+        st.plotly_chart(fig_imp, use_container_width=True)
         
-        cols_pay = st.columns(6)
-        pay_values = []
+        # Distribución de predicciones
+        st.subheader("Distribución de Predicciones")
+        pred_df = pd.DataFrame({
+            'Real': y_true,
+            'Predicho': y_pred
+        })
         
-        pay_labels = ["PAY_0 (Actual)", "PAY_2", "PAY_3", "PAY_4", "PAY_5", "PAY_6"]
-        
-        for i, col in enumerate(cols_pay):
-            with col:
-                pay_val = st.number_input(
-                    pay_labels[i],
-                    min_value=-2,
-                    max_value=9,
-                    value=0,
-                    key=f"pay_{i}"
-                )
-                pay_values.append(pay_val)
-        
-        st.divider()
-        st.markdown("#### 💳 Montos Facturados (BILL_AMT)")
-        
-        cols_bill = st.columns(6)
-        bill_values = []
-        
-        for i, col in enumerate(cols_bill):
-            with col:
-                bill_val = st.number_input(
-                    f"BILL_AMT{i+1}",
-                    min_value=0.0,
-                    max_value=1000000.0,
-                    value=10000.0,
-                    step=500.0,
-                    key=f"bill_{i}"
-                )
-                bill_values.append(bill_val)
-        
-        st.divider()
-        st.markdown("#### 💵 Pagos Realizados (PAY_AMT)")
-        
-        cols_pay_amt = st.columns(6)
-        pay_amt_values = []
-        
-        for i, col in enumerate(cols_pay_amt):
-            with col:
-                pay_amt_val = st.number_input(
-                    f"PAY_AMT{i+1}",
-                    min_value=0.0,
-                    max_value=500000.0,
-                    value=5000.0,
-                    step=100.0,
-                    key=f"pay_amt_{i}"
-                )
-                pay_amt_values.append(pay_amt_val)
-        
-        st.divider()
-        submitted = st.form_submit_button("🚀 Calcular Predicción", use_container_width=True)
-    
-    if submitted:
-        # Preparar datos para predicción
-        input_data = {
-            'LIMIT_BAL': limite_credito,
-            'SEX': sexo,
-            'EDUCATION': educacion,
-            'MARRIAGE': estado_civil,
-            'AGE': edad,
-            'PAY_0': pay_values[0],
-            'PAY_2': pay_values[1],
-            'PAY_3': pay_values[2],
-            'PAY_4': pay_values[3],
-            'PAY_5': pay_values[4],
-            'PAY_6': pay_values[5],
-            'BILL_AMT1': bill_values[0],
-            'BILL_AMT2': bill_values[1],
-            'BILL_AMT3': bill_values[2],
-            'BILL_AMT4': bill_values[3],
-            'BILL_AMT5': bill_values[4],
-            'BILL_AMT6': bill_values[5],
-            'PAY_AMT1': pay_amt_values[0],
-            'PAY_AMT2': pay_amt_values[1],
-            'PAY_AMT3': pay_amt_values[2],
-            'PAY_AMT4': pay_amt_values[3],
-            'PAY_AMT5': pay_amt_values[4],
-            'PAY_AMT6': pay_amt_values[5]
-        }
-        
-        # Convertir a DataFrame
-        df_input = pd.DataFrame([input_data])
-        
-        # Asegurar orden de columnas
-        df_input = df_input[columns]
-        
-        # Escalar datos
-        df_scaled = scaler.transform(df_input)
-        
-        # Hacer predicción
-        prediction_proba = model.predict_proba(df_scaled)[0][1]
-        prediction_class = model.predict(df_scaled)[0]
-        
-        # Mostrar resultados
-        st.divider()
-        st.markdown("### 🎯 Resultado de la Predicción")
-        
-        col_result1, col_result2 = st.columns(2)
-        
-        with col_result1:
-            if prediction_class == 0:
-                st.markdown(f"""
-                <div class="prediction-result risk-low">
-                    ✅ BAJO RIESGO<br>
-                    <small>Probabilidad de impago: {prediction_proba:.2%}</small>
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.markdown(f"""
-                <div class="prediction-result risk-high">
-                    ⚠️ ALTO RIESGO<br>
-                    <small>Probabilidad de impago: {prediction_proba:.2%}</small>
-                </div>
-                """, unsafe_allow_html=True)
-        
-        with col_result2:
-            # Gráfico de probabilidad
-            fig = go.Figure(go.Bar(
-                x=['No Impago', 'Impago'],
-                y=[1 - prediction_proba, prediction_proba],
-                marker_color=['#28a745', '#dc3545']
-            ))
-            fig.update_layout(
-                title='📊 Probabilidad de Impago',
-                yaxis_title='Probabilidad',
-                showlegend=False,
-                height=300
+        col1, col2 = st.columns(2)
+        with col1:
+            fig_real = px.pie(
+                pred_df,
+                names='Real',
+                title='Distribución Real',
+                color='Real',
+                color_discrete_map={0: '#636EFA', 1: '#EF553B'}
             )
-            st.plotly_chart(fig, use_container_width=True)
-        
-        # Explicación
-        st.expander("📖 Interpretación del Resultado").write(f"""
-        **Clase Predicha:** {'Impago (1)' if prediction_class == 1 else 'No Impago (0)'}
-        
-        **Probabilidad de Impago:** {prediction_proba:.4f} ({prediction_proba:.2%})
-        
-        **Recomendación:** 
-        {'⚠️ Se recomienda revisar detalladamente la solicitud de crédito. El cliente presenta características asociadas con alto riesgo de impago.' if prediction_class == 1 else '✅ El cliente presenta un perfil de bajo riesgo. Puede considerarse para aprobación de crédito.'}
-        """)
-        
-        # Guardar en MongoDB
-        try:
-            mongo_client = get_mongo_connection()
-            db = mongo_client['creditflow_db']
-            collection = db['predicciones']
-            
-            documento = {
-                "fecha": datetime.now(),
-                "datos_cliente": input_data,
-                "prediccion_clase": int(prediction_class),
-                "probabilidad_impago": float(prediction_proba),
-                "modelo": "XGBoost",
-                "version": "1.0"
-            }
-            
-            collection.insert_one(documento)
-            st.success("✅ Predicción guardada en MongoDB")
-            
-            mongo_client.close()
-        except Exception as e:
-            st.warning(f"⚠️ No se pudo guardar en MongoDB: {str(e)}")
+            st.plotly_chart(fig_real, use_container_width=True)
+        with col2:
+            fig_pred = px.pie(
+                pred_df,
+                names='Predicho',
+                title='Distribución Predicha',
+                color='Predicho',
+                color_discrete_map={0: '#636EFA', 1: '#EF553B'}
+            )
+            st.plotly_chart(fig_pred, use_container_width=True)
 
 with tab2:
-    st.markdown("### 🏗️ Modelo Entidad-Relación Normalizado")
+    st.header("🔮 Predicción Individual")
     
-    # Diagrama ER - Sin los backticks de markdown
-    er_diagram = """
-    erDiagram
-        dim_estado_civil {
-            int id_estado_civil PK
-            varchar descripcion_estado_civil
-        }
-        dim_sexo {
-            int id_sexo PK
-            varchar descripcion_sexo
-        }
-        dim_educacion {
-            int id_educacion PK
-            varchar nivel_educativo
-        }
-        dim_cliente {
-            int id_cliente PK
-            int id_sexo FK
-            int id_educacion FK
-            int id_estado_civil FK
-            int edad
-            float limite_credito
-        }
-        riesgo_crediticio {
-            int id_cliente FK
-            int incumplimiento_proximo_mes
-        }
-        dim_estatus_pago {
-            int id_estatus PK
-            varchar descripcion_estatus
-        }
-        dim_tiempo_mes {
-            int id_mes PK
-            varchar mes_referencia
-            int orden_historial
-        }
-        historial_pagos {
-            int id_historial PK
-            int id_cliente FK
-            int id_mes FK
-            int id_estatus_pago FK
-            float monto_estado_cuenta
-            float monto_pago_anterior
-        }
-        dim_estado_civil ||--o{ dim_cliente : "tiene"
-        dim_sexo ||--o{ dim_cliente : "tiene"
-        dim_educacion ||--o{ dim_cliente : "tiene"
-        dim_cliente ||--o| riesgo_crediticio : "posee"
-        dim_cliente ||--o{ historial_pagos : "realiza"
-        dim_estatus_pago ||--o{ historial_pagos : "clasifica"
-        dim_tiempo_mes ||--o{ historial_pagos : "registra"
-    """
+    st.markdown("Ingresa los datos de un nuevo cliente para realizar una predicción:")
     
-    # Usar st_mermaid en lugar de st.markdown
-    with st.container(border=True):
-        st_mermaid(er_diagram)
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        limit_bal = st.number_input("Límite de Crédito", min_value=0, value=100000, step=10000)
+        sex = st.selectbox("Sexo (1=Masculino, 2=Femenino)", [1, 2])
+        education = st.selectbox("Educación (1=Grad, 2=University, 3=High School, 4=Others)", [1, 2, 3, 4])
+        marriage = st.selectbox("Estado Civil (1=Married, 2=Single, 3=Other)", [1, 2, 3])
+        age = st.number_input("Edad", min_value=18, max_value=100, value=30)
+        pay_0 = st.number_input("Estado Pago Mes Anterior (-1=Pagado, 0=Uso, 1-9=Retraso)", value=0)
+        pay_2 = st.number_input("Estado Pago Mes 2", value=0)
+        pay_3 = st.number_input("Estado Pago Mes 3", value=0)
+        pay_4 = st.number_input("Estado Pago Mes 4", value=0)
+        pay_5 = st.number_input("Estado Pago Mes 5", value=0)
+        pay_6 = st.number_input("Estado Pago Mes 6", value=0)
+    
+    with col2:
+        bill_amt1 = st.number_input("Monto Factura Mes 1", value=50000)
+        bill_amt2 = st.number_input("Monto Factura Mes 2", value=50000)
+        bill_amt3 = st.number_input("Monto Factura Mes 3", value=50000)
+        bill_amt4 = st.number_input("Monto Factura Mes 4", value=50000)
+        bill_amt5 = st.number_input("Monto Factura Mes 5", value=50000)
+        bill_amt6 = st.number_input("Monto Factura Mes 6", value=50000)
+        pay_amt1 = st.number_input("Pago Realizado Mes 1", value=2000)
+        pay_amt2 = st.number_input("Pago Realizado Mes 2", value=2000)
+        pay_amt3 = st.number_input("Pago Realizado Mes 3", value=2000)
+        pay_amt4 = st.number_input("Pago Realizado Mes 4", value=2000)
+        pay_amt5 = st.number_input("Pago Realizado Mes 5", value=2000)
+        pay_amt6 = st.number_input("Pago Realizado Mes 6", value=2000)
+    
+    if st.button("🎯 Realizar Predicción", type="primary"):
+        # Crear array con las características en el orden correcto
+        new_data = np.array([[
+            limit_bal, sex, education, marriage, age,
+            pay_0, pay_2, pay_3, pay_4, pay_5, pay_6,
+            bill_amt1, bill_amt2, bill_amt3, bill_amt4, bill_amt5, bill_amt6,
+            pay_amt1, pay_amt2, pay_amt3, pay_amt4, pay_amt5, pay_amt6,
+            0  # Valor dummy para la columna target (no se usa en predicción)
+        ]])
+        
+        if model_choice == "K-Means (Clustering)":
+            # Para K-Means, usar solo las 23 características sin el target
+            new_data_kmeans = new_data[:, :23]
+            new_data_scaled = kmeans_scaler.transform(new_data_kmeans)
+            cluster_pred = kmeans_model.predict(new_data_scaled)[0]
+            
+            st.success(f"✅ El cliente pertenece al **Cluster {cluster_pred}**")
+            
+            # Mostrar características del cluster
+            cluster_info = df[df['Cluster'] == cluster_pred]
+            
+            st.info(f"""
+            **Características del Cluster {cluster_pred}:**
+            - Clientes en este cluster: {len(cluster_info)}
+            - Tasa de default: {cluster_info['default payment next month'].mean()*100:.2f}%
+            - Límite de crédito promedio: ${cluster_info['LIMIT_BAL'].mean():,.0f}
+            - Edad promedio: {cluster_info['AGE'].mean():.1f} años
+            """)
+        else:
+            # Para Random Forest, usar las 24 características
+            new_data_scaled = rf_scaler.transform(new_data)  # new_data ya es numpy array, no debería fallar
+            rf_pred = rf_model.predict(new_data_scaled)[0]
+            rf_proba = rf_model.predict_proba(new_data_scaled)[0]
+            
+            if rf_pred == 1:
+                st.error(f"⚠️ **Alto Riesgo**: El cliente tiene alta probabilidad de default ({rf_proba[1]*100:.2f}%)")
+            else:
+                st.success(f"✅ **Bajo Riesgo**: El cliente tiene baja probabilidad de default ({rf_proba[0]*100:.2f}%)")
+            
+            # Mostrar probabilidades
+            proba_df = pd.DataFrame({
+                'Clase': ['No Default', 'Default'],
+                'Probabilidad': rf_proba * 100
+            })
+            
+            fig_proba = px.bar(
+                proba_df,
+                x='Clase',
+                y='Probabilidad',
+                title='Probabilidades de Predicción',
+                color='Clase',
+                color_discrete_map={'No Default': '#636EFA', 'Default': '#EF553B'}
+            )
+            st.plotly_chart(fig_proba, use_container_width=True)
 
 with tab3:
-    st.markdown("### 🧪 Experimentos Registrados en MongoDB")
+    st.header("📈 Visualización")
     
-    st.info("💡 Esta sección muestra el historial de experimentos de ML almacenados en MongoDB")
-    
-    try:
-        mongo_client = get_mongo_connection()
-        db = mongo_client['creditflow_db']
-        collection = db['experimentos_ml']
+    if model_choice == "K-Means (Clustering)":
+        # Visualización PCA para K-Means
+        st.subheader("Distribución de Clientes en 2D (PCA)")
         
-        # Obtener todos los experimentos
-        experimentos = list(collection.find().sort("fecha", -1))
+        pca = PCA(n_components=2)
+        X_pca = pca.fit_transform(X_scaled)
         
-        if experimentos:
-            st.success(f"✅ {len(experimentos)} experimentos encontrados")
-            
-            for exp in experimentos:
-                with st.expander(f"🧪 {exp.get('algoritmo', 'Desconocido')} - {exp.get('fecha', 'Sin fecha')}"):
-                    col_exp1, col_exp2 = st.columns(2)
-                    
-                    with col_exp1:
-                        st.markdown("**Hiperparámetros:**")
-                        hiperparams = exp.get('hiperparametros', {})
-                        for key, value in hiperparams.items():
-                            st.write(f"- {key}: {value}")
-                    
-                    with col_exp2:
-                        st.markdown("**Métricas:**")
-                        metricas = exp.get('metricas', {})
-                        for key, value in metricas.items():
-                            st.write(f"- {key}: {value:.4f}" if isinstance(value, float) else f"- {key}: {value}")
-                
-        else:
-            st.warning("⚠️ No hay experimentos registrados aún. Ejecuta el notebook de entrenamiento para registrar experimentos.")
-        
-        mongo_client.close()
-        
-    except Exception as e:
-        st.error(f"❌ Error al conectar con MongoDB: {str(e)}")
-        
-        # Mostrar datos de ejemplo si falla la conexión
-        st.info("📋 Mostrando estructura esperada de documentos:")
-        st.json({
-            "fecha": "2025-02-18T10:30:00",
-            "algoritmo": "XGBoost",
-            "hiperparametros": {
-                "n_estimators": 100,
-                "max_depth": 5,
-                "learning_rate": 0.1
-            },
-            "metricas": {
-                "accuracy": 0.823,
-                "precision": 0.781,
-                "recall": 0.754,
-                "f1_score": 0.767
-            }
+        pca_df = pd.DataFrame({
+            'PCA1': X_pca[:, 0],
+            'PCA2': X_pca[:, 1],
+            'Cluster': df['Cluster'].astype(str),
+            'Default': df['default payment next month'].map({0: 'No', 1: 'Sí'})
         })
+        
+        fig = px.scatter(
+            pca_df,
+            x='PCA1',
+            y='PCA2',
+            color='Cluster',
+            symbol='Default',
+            title='Distribución de Clientes por Cluster',
+            hover_data=['Cluster', 'Default']
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Información adicional
+        st.info("""
+        **Interpretación:**
+        - Los puntos de colores representan los clientes agrupados por cluster
+        - Los símbolos indican si el cliente hizo default o no
+        - Los clusters agrupan clientes con comportamientos similares
+        """)
+        
+    else: # Random Forest
+        # Visualización de distribución de características importantes
+        st.subheader("Distribución de Características Importantes")
+
+        if hasattr(rf_model, 'feature_importances_'):
+            importances = rf_model.feature_importances_
+            
+            # SOLUCIÓN: Extraemos los nombres reales del DataFrame cargado.
+            # El modelo fue entrenado con 24 columnas (todas excepto 'ID').
+            correct_feature_names = [col for col in df.columns if col != 'ID']
+            
+            # Creamos el DataFrame con los 24 nombres reales y las 24 importancias
+            feature_importance = pd.DataFrame({
+                'Feature': correct_feature_names,
+                'Importance': importances
+            }).sort_values('Importance', ascending=False)
+
+            # Seleccionar las 5 características más importantes
+            top_features = feature_importance.head(5)['Feature'].tolist()
+
+            # Crear subplots
+            fig_dist = make_subplots(
+                rows=2, cols=3,
+                subplot_titles=top_features + ['Accuracy'],
+                specs=[[{"type": "histogram"}, {"type": "histogram"}, {"type": "histogram"}],
+                       [{"type": "histogram"}, {"type": "histogram"}, {"type": "indicator"}]]
+            )
+
+            # Agregar histogramas para cada característica importante
+            for i, feature in enumerate(top_features):
+                row = i // 3 + 1
+                col = i % 3 + 1
+                fig_dist.add_trace(
+                    go.Histogram(
+                        x=df[feature], # Ahora 'feature' es un nombre real como 'PAY_0' o 'LIMIT_BAL'
+                        name=feature,
+                        marker_color='#636EFA',
+                        showlegend=False
+                    ),
+                    row=row, col=col
+                )
+
+            # Agregar indicador de accuracy
+            # Calculamos el accuracy usando el dataset completo para el gauge
+            y_true = df['default payment next month']
+            # .values convierte el DataFrame a un array de NumPy, ignorando la validación estricta de nombres
+            X_rf_array = df.drop(columns=['ID']).values
+            X_scaled = rf_scaler.transform(X_rf_array)
+            y_pred = rf_model.predict(X_scaled)
+            acc_val = accuracy_score(y_true, y_pred) * 100
+
+            fig_dist.add_trace(
+                go.Indicator(
+                    mode="gauge+number",
+                    value=acc_val,
+                    title={'text': "Accuracy (%)"},
+                    gauge={
+                        'axis': {'range': [0, 100]},
+                        'bar': {'color': "#636EFA"},
+                        'steps': [
+                            {'range': [0., 50.], 'color': "#EF553B"},
+                            {'range': [50., 75.], 'color': "#FFA15A"},
+                            {'range': [75., 100.], 'color': "#00CC96"}
+                        ]
+                    }
+                ),
+                row=2, col=3
+            )
+
+            fig_dist.update_layout(height=600, showlegend=False, title_text="Distribución de las 5 Características Más Importantes")
+            st.plotly_chart(fig_dist, use_container_width=True)
+            
+            # Información adicional
+            st.info("""
+            **Interpretación:**
+            - Los histogramas muestran la distribución de las características que más peso tienen en la decisión del modelo.
+            - El gauge indica el Accuracy (precisión) global del modelo.
+            """)
+
+# Información adicional en el sidebar
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 📚 Información")
+st.sidebar.markdown("""
+**Modelos disponibles:**
+- **K-Means**: Clustering para segmentación de clientes
+- **Random Forest**: Clasificación para predicción de default
+
+**Dataset:**
+- 30,000 clientes
+- 23 características
+- Target: default payment next month
+""")
