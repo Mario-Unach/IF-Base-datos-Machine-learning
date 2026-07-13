@@ -1,12 +1,15 @@
 import streamlit as st
 import pandas as pd
 import sys
+import importlib
 from pathlib import Path
 from sqlalchemy import create_engine, text
 
 # Agregar el directorio Streamlit al path para importar db_connections
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from db_connections import get_sql_connection, get_mongo_db
+from db_connections import get_sql_connection, get_mongo_db, get_mongo_connection
+import auth as auth_module
+auth_module = importlib.reload(auth_module)
 from datetime import datetime
 
 # Configuración de página
@@ -83,13 +86,22 @@ st.markdown("""
 
 st.markdown('<p class="page-header">🛠️ Administración de Base de Datos</p>', unsafe_allow_html=True)
 
+auth_module.require_role("SA", "Administrador")
+
+with st.sidebar:
+    st.markdown("### 🔐 Sesión")
+    st.caption(f"Usuario: {st.session_state.login_user}")
+    st.caption(f"Perfil: {st.session_state.login_profile}")
+    auth_module.logout_button()
+
 # Pestañas principales
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "👥 Usuarios y Roles",
     "🔒 Auditoría y Triggers",
     "💾 Backups y DRP",
     "❤️ Health Check",
-    "⌨️ Terminal SQL"
+    "⌨️ Terminal SQL",
+    "👤 Administrar Usuarios"
 ])
 
 with tab1:
@@ -527,3 +539,128 @@ with tab5:
                 st.error(f"❌ Error al ejecutar consulta: {str(e)}")
         else:
             st.warning("⚠️ Por favor escribe una consulta SQL")
+
+with tab6:
+    st.markdown("### 👤 Administración de Usuarios y Roles")
+    st.info("Desde aquí puedes consultar usuarios, crear usuarios de base de datos y asignar o quitar roles.")
+
+    try:
+        conn = get_sql_connection()
+        engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
+
+        st.markdown("#### 📋 Usuarios y roles actuales")
+        query_usuarios = """
+            SELECT
+                dp.name AS usuario,
+                dp.type_desc AS tipo_principal,
+                ISNULL(rp.name, 'Sin rol') AS rol,
+                dp.create_date,
+                dp.modify_date
+            FROM sys.database_principals dp
+            LEFT JOIN sys.database_role_members drm ON dp.principal_id = drm.member_principal_id
+            LEFT JOIN sys.database_principals rp ON drm.role_principal_id = rp.principal_id
+            WHERE dp.type IN ('S', 'U', 'G')
+              AND dp.name NOT IN ('dbo', 'guest', 'INFORMATION_SCHEMA', 'sys')
+            ORDER BY dp.name
+        """
+
+        df_usuarios = pd.read_sql(text(query_usuarios), engine)
+        st.dataframe(df_usuarios, use_container_width=True)
+
+        st.divider()
+        col_u1, col_u2 = st.columns(2)
+
+        with col_u1:
+            st.markdown("#### ➕ Crear usuario de base de datos")
+            nuevo_usuario = st.text_input("Nombre del usuario DB", key="nuevo_usuario_db")
+            nueva_password = st.text_input("Contraseña del login", type="password", key="nuevo_password_login")
+            crear_login = st.checkbox("Crear también el login en SQL Server", value=True, key="crear_login_usuario")
+            rol_asignar = st.selectbox("Rol a asignar", ["rol_analista", "rol_admin"], key="rol_usuario_nuevo")
+
+            if st.button("🆕 Crear usuario", type="primary"):
+                if not nuevo_usuario.strip():
+                    st.warning("⚠️ Escribe un nombre de usuario.")
+                elif crear_login and not nueva_password.strip():
+                    st.warning("⚠️ Escribe una contraseña para el login.")
+                else:
+                    try:
+                        with conn.cursor() as cursor:
+                            if crear_login:
+                                cursor.execute(f"IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = '{nuevo_usuario}') CREATE LOGIN [{nuevo_usuario}] WITH PASSWORD = '{nueva_password}'")
+                            cursor.execute(f"IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '{nuevo_usuario}') CREATE USER [{nuevo_usuario}] FOR LOGIN [{nuevo_usuario}]")
+                            cursor.execute(f"ALTER ROLE [{rol_asignar}] ADD MEMBER [{nuevo_usuario}]")
+                        conn.commit()
+                        st.success("✅ Usuario creado y asignado correctamente")
+                        st.rerun()
+                    except Exception as e:
+                        conn.rollback()
+                        st.error(f"❌ No se pudo crear el usuario: {str(e)}")
+
+        with col_u2:
+            st.markdown("#### 🔧 Administrar usuario existente")
+            usuario_existente = st.text_input("Usuario DB existente", key="usuario_existente_admin")
+            rol_existente = st.selectbox("Rol", ["rol_analista", "rol_admin"], key="rol_existente_admin")
+
+            col_acc1, col_acc2 = st.columns(2)
+            with col_acc1:
+                if st.button("➕ Agregar a rol"):
+                    if usuario_existente.strip():
+                        try:
+                            with conn.cursor() as cursor:
+                                cursor.execute(f"ALTER ROLE [{rol_existente}] ADD MEMBER [{usuario_existente}]")
+                            conn.commit()
+                            st.success("✅ Usuario agregado al rol")
+                            st.rerun()
+                        except Exception as e:
+                            conn.rollback()
+                            st.error(f"❌ Error al agregar rol: {str(e)}")
+                    else:
+                        st.warning("⚠️ Escribe un usuario existente.")
+
+            with col_acc2:
+                if st.button("➖ Quitar de rol"):
+                    if usuario_existente.strip():
+                        try:
+                            with conn.cursor() as cursor:
+                                cursor.execute(f"ALTER ROLE [{rol_existente}] DROP MEMBER [{usuario_existente}]")
+                            conn.commit()
+                            st.success("✅ Usuario removido del rol")
+                            st.rerun()
+                        except Exception as e:
+                            conn.rollback()
+                            st.error(f"❌ Error al quitar rol: {str(e)}")
+                    else:
+                        st.warning("⚠️ Escribe un usuario existente.")
+
+            st.divider()
+            st.markdown("#### 🗑️ Eliminar usuario")
+            eliminar_usuario = st.text_input("Usuario a eliminar", key="usuario_eliminar_admin")
+
+            if st.button("Eliminar usuario y login"):
+                if eliminar_usuario.strip():
+                    try:
+                        with conn.cursor() as cursor:
+                            cursor.execute("""
+                                DECLARE @sql NVARCHAR(MAX) = N'';
+                                SELECT @sql += N'ALTER ROLE [' + rp.name + '] DROP MEMBER [' + dp.name + '];'
+                                FROM sys.database_principals dp
+                                INNER JOIN sys.database_role_members drm ON dp.principal_id = drm.member_principal_id
+                                INNER JOIN sys.database_principals rp ON drm.role_principal_id = rp.principal_id
+                                WHERE dp.name = ?;
+                                EXEC sp_executesql @sql;
+                            """, eliminar_usuario)
+                            cursor.execute(f"IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '{eliminar_usuario}') DROP USER [{eliminar_usuario}]")
+                            cursor.execute(f"IF EXISTS (SELECT 1 FROM sys.server_principals WHERE name = '{eliminar_usuario}') DROP LOGIN [{eliminar_usuario}]")
+                        conn.commit()
+                        st.success("✅ Usuario eliminado")
+                        st.rerun()
+                    except Exception as e:
+                        conn.rollback()
+                        st.error(f"❌ Error al eliminar usuario: {str(e)}")
+                else:
+                    st.warning("⚠️ Escribe el usuario a eliminar.")
+
+        conn.close()
+
+    except Exception as e:
+        st.error(f"❌ Error en administración de usuarios: {str(e)}")

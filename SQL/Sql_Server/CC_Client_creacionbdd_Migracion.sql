@@ -152,7 +152,7 @@ CREATE TABLE staging_credit_cards (
 -- Cargar los datos del archivo a la tabla staging
 -- Asegúrate de cambiar la ruta por la ubicación real de tu archivo
 BULK INSERT staging_credit_cards
-FROM '/var/opt/mssql/temp/default of credit card clients.csv'
+FROM 'E:\Unach\Semestre4\ProyectoML&BDD\IF-Base-datos-Machine-learning\Dataset\default of credit card clients.csv'
 WITH (
     FIELDTERMINATOR = ',',  -- El separador de tu archivo
     ROWTERMINATOR = '0x0a',   -- Salto de línea
@@ -192,6 +192,13 @@ CROSS APPLY (
         (5, s.PAY_5, s.BILL_AMT5, s.PAY_AMT5),
         (6, s.PAY_6, s.BILL_AMT6, s.PAY_AMT6)
 ) AS meses(id_mes, estatus, estado_cuenta, pago_anterior);
+
+
+
+--------------------------------------------------------------
+--CONSULTAS BASICAS
+-----------------------------------------------------------------
+
 
 SELECT COUNT (*) FROM historial_pagos
 

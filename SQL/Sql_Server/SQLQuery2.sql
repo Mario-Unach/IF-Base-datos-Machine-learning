@@ -155,6 +155,7 @@ CREATE ROLE rol_admin;
 -- Asignar permisos al rol_analista (solo lectura)
 GRANT SELECT ON vista_cliente_ml TO rol_analista;
 GRANT SELECT ON vista_historial_cliente TO rol_analista;
+
 GRANT SELECT ON dim_cliente TO rol_analista;
 GRANT SELECT ON dim_sexo TO rol_analista;
 GRANT SELECT ON dim_educacion TO rol_analista;
@@ -169,8 +170,8 @@ GRANT SELECT ON riesgo_crediticio TO rol_analista;
 GRANT CONTROL ON DATABASE::CC_Client TO rol_admin;
 
 -- Crear logins con contraseña (nivel servidor)
-CREATE LOGIN analista WITH PASSWORD = 'ContraseñaSegura123!';
-CREATE LOGIN admin WITH PASSWORD = 'ContraseñaSegura456!';
+CREATE LOGIN analista WITH PASSWORD = 'ContraseñaSegura123*';
+CREATE LOGIN admin WITH PASSWORD = 'ContraseñaSegura456*';
 
 -- Crear usuarios en la base vinculados a los logins
 CREATE USER analista FOR LOGIN analista;
@@ -185,34 +186,34 @@ GO
 ---Estrategia de Backups y Restauración--------
 -- Backup completo de la base de datos CC_Client
 BACKUP DATABASE CC_Client
-TO DISK = '/var/opt/mssql/backups/CC_Client_Full.bak'
+TO DISK = 'C:\Backup\CC_Client_Full.bak'
 WITH FORMAT, INIT, NAME = 'Full Backup CC_Client';
 GO
 
 -- Backup diferencial
 BACKUP DATABASE CC_Client
-TO DISK = '/var/opt/mssql/backups/CC_Client_Diff.bak'
+TO DISK = 'C:\Backup\CC_Client_Diff.bak'
 WITH DIFFERENTIAL, NAME = 'Differential Backup CC_Client';
 GO
 
 -- Backup de log transaccional 
 BACKUP LOG CC_Client
-TO DISK = '/var/opt/mssql/backups/CC_Client_Log.trn'
+TO DISK = 'C:\Backup\CC_Client_Log.trn'
 WITH NAME = 'Log Backup CC_Client';
 GO
 
 -- Restauracion 
 -- Restaurar FULL
 RESTORE DATABASE CC_Client
-FROM DISK = '/var/opt/mssql/backups/CC_Client_Full.bak'
+FROM DISK = 'C:\Backup\CC_Client_Full.bak'
 WITH NORECOVERY; -- Dejar en estado de restauración para aplicar logs
 
 -- Restaurar DIFF (si existe)
 RESTORE DATABASE CC_Client
-FROM DISK = '/var/opt/mssql/backups/CC_Client_Diff.bak'
+FROM DISK = 'C:\Backup\CC_Client_Diff.bak'
 WITH NORECOVERY;
 
 -- Restaurar logs (uno o varios)
 RESTORE LOG CC_Client
-FROM DISK = '/var/opt/mssql/backups/CC_Client_Log.trn'
+FROM DISK = 'C:\Backup\CC_Client_Log.trn'
 WITH RECOVERY; -- Último log con RECOVERY para dejar la BD operativa

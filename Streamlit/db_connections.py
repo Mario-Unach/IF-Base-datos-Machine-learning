@@ -1,24 +1,32 @@
 import pyodbc
-import pymongo
 import streamlit as st
 import pandas as pd
+
+try:
+    import pymongo
+except ImportError:
+    pymongo = None
 
 # ---------------------------------------------------------
 # CONEXIÓN A SQL SERVER (Docker en Arch Linux)
 # ---------------------------------------------------------
-def get_sql_connection():
+def get_sql_connection(username=None, password=None, **kwargs):
     """
     Conecta con SQL Server en Docker.
     - SERVER=localhost,1433  (puerto expuesto en docker-compose)
     - DATABASE=CC_Client     (la BD que creaste en tu script)
     - TrustServerCertificate=yes (OBLIGATORIO en Linux/Docker para evitar errores SSL)
     """
+    sql_user = username or kwargs.get("nombre de usuario") or kwargs.get("nombre_usuario") or kwargs.get("usuario") or "sa"
+    sql_password = password or kwargs.get("contraseña") or kwargs.get("contrasena") or kwargs.get("clave") or "Flaquis2026*"
+
     conn_str = (
-        "DRIVER={ODBC Driver 17 for SQL Server};"
-        "SERVER=localhost,1433;"
+        "DRIVER={ODBC Driver 18 for SQL Server};"
+        "SERVER=localhost;"
         "DATABASE=CC_Client;"
-        "UID=sa;"
-        "PWD=Soymario.7;"
+        f"UID={sql_user};"
+        f"PWD={sql_password};"
+        "Encrypt=yes;"
         "TrustServerCertificate=yes;"
     )
     try:
@@ -34,6 +42,10 @@ def get_mongo_connection():
     """
     Retorna la conexión al cliente MongoDB.
     """
+    if pymongo is None:
+        st.error("❌ pymongo no está instalado en este entorno.")
+        return None
+
     try:
         client = pymongo.MongoClient("mongodb://localhost:27017/", serverSelectionTimeoutMS=3000)
         client.admin.command('ping')

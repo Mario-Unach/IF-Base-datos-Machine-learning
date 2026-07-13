@@ -4,6 +4,7 @@ import numpy as np
 import joblib
 from pathlib import Path
 import sys
+import importlib
 import plotly.graph_objects as go
 import plotly.express as px
 from streamlit_mermaid import st_mermaid
@@ -11,6 +12,8 @@ from streamlit_mermaid import st_mermaid
 # Agregar el directorio Streamlit al path para importar db_connections
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from db_connections import get_sql_connection, get_mongo_connection
+import auth as auth_module
+auth_module = importlib.reload(auth_module)
 from datetime import datetime
 
 # Configuración de página
@@ -104,6 +107,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown('<p class="page-header">🤖 Modelo Predictivo XGBoost - Detección de Impagos</p>', unsafe_allow_html=True)
+
+auth_module.require_login()
+
+with st.sidebar:
+    st.markdown("### 🔐 Sesión")
+    st.caption(f"Usuario: {st.session_state.login_user}")
+    st.caption(f"Perfil: {st.session_state.login_profile}")
+    auth_module.logout_button()
 
 # Ruta de los modelos - usar ruta absoluta correcta desde el directorio raíz del workspace
 MODEL_PATH = Path("Models/Gradient_Boosting/Notebook")

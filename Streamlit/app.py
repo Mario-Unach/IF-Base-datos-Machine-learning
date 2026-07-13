@@ -5,11 +5,14 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import os
+import importlib
 from sqlalchemy import create_engine, text
 
 # Agregar el directorio actual al path para importar db_connections
 sys.path.insert(0, str(Path(__file__).parent))
 from db_connections import get_sql_connection, get_mongo_connection
+import auth as auth_module
+auth_module = importlib.reload(auth_module)
 
 # Configuración de página
 st.set_page_config(
@@ -127,6 +130,22 @@ with col_title:
     st.markdown('<p class="main-header">CreditFlow Analytics</p>', unsafe_allow_html=True)
 
 st.markdown('<p class="sub-header">Sistema Predictivo de Riesgo Crediticio | Arquitectura Híbrida SQL Server + MongoDB</p>', unsafe_allow_html=True)
+
+auth_module.init_session_state()
+
+with st.sidebar:
+    st.markdown("### 🔐 Sesión")
+    if st.session_state.authenticated:
+        st.success(f"Conectado como {st.session_state.login_profile}")
+        st.caption(f"Usuario: {st.session_state.login_user}")
+        auth_module.render_role_menu()
+    else:
+        st.info("No hay sesión activa")
+    auth_module.logout_button()
+
+if not st.session_state.authenticated:
+    auth_module.login_panel()
+    st.stop()
 
 # Sidebar simplificado
 with st.sidebar:
