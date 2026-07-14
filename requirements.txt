@@ -7,9 +7,9 @@
 #xgboost
 #lightgbm
 #openpyxl
-#pymongo
-#joblib
+pymongo
+joblib
 streamlit
-#plotly
-#pyodbc
-#sqlalchemy
+plotly
+pyodbc
+sqlalchemy
