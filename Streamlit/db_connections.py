@@ -8,7 +8,7 @@ except ImportError:
     pymongo = None
 
 # ---------------------------------------------------------
-# CONEXIÓN A SQL SERVER (Docker en Arch Linux)
+# CONEXIÓN A SQL SERVER
 # ---------------------------------------------------------
 def get_sql_connection(username=None, password=None, **kwargs):
     """
@@ -21,12 +21,11 @@ def get_sql_connection(username=None, password=None, **kwargs):
     sql_password = password or kwargs.get("contraseña") or kwargs.get("contrasena") or kwargs.get("clave") or "Flaquis2026*"
 
     conn_str = (
-        "DRIVER={ODBC Driver 18 for SQL Server};"
-        "SERVER=localhost;"
+        "DRIVER={ODBC Driver 17 for SQL Server};"
+        "SERVER=localhost,1433;"
         "DATABASE=CC_Client;"
-        f"UID={sql_user};"
-        f"PWD={sql_password};"
-        "Encrypt=yes;"
+        "UID=sa;"
+        "PWD=Soymario.7;"
         "TrustServerCertificate=yes;"
     )
     try:

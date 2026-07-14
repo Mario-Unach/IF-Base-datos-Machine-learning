@@ -3,274 +3,124 @@ from pathlib import Path
 import sys
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
-import os
-import importlib
 from sqlalchemy import create_engine, text
 
-# Agregar el directorio actual al path para importar db_connections
 sys.path.insert(0, str(Path(__file__).parent))
-from db_connections import get_sql_connection, get_mongo_connection
+from db_connections import get_sql_connection
 import auth as auth_module
-auth_module = importlib.reload(auth_module)
 
-# Configuración de página
+auth_module.init_session_state()
+
 st.set_page_config(
-    page_title="CreditFlow Analytics", 
+    page_title="CreditFlow Analytics",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# CSS personalizado - Tema oscuro profesional
+# CSS
 st.markdown("""
 <style>
-    /* Fondo principal */
-    .stApp {
-        background: linear-gradient(135deg, #0f1419 0%, #1a1f2e 50%, #0d1117 100%);
-    }
-    
-    /* Headers */
-    .main-header {
-        font-size: 3.5rem;
-        font-weight: 800;
-        background: linear-gradient(90deg, #00d4ff, #7b2cbf, #00d4ff);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        text-align: center;
-        padding: 2rem 0;
-        text-shadow: 0 0 30px rgba(0, 212, 255, 0.3);
-    }
-    
-    .sub-header {
-        font-size: 1.4rem;
-        color: #a0aec0;
-        text-align: center;
-        margin-bottom: 2.5rem;
-        font-weight: 300;
-    }
-    
-    /* Tarjetas de métricas */
-    .metric-container {
-        background: linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%);
-        padding: 1.8rem;
-        border-radius: 16px;
-        border: 1px solid rgba(148, 163, 184, 0.1);
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-        backdrop-filter: blur(10px);
-    }
-    
-    /* Métricas */
-    [data-testid="stMetricValue"] {
-        font-size: 2.5rem;
-        font-weight: 700;
-        color: #00d4ff !important;
-    }
-    
-    [data-testid="stMetricLabel"] {
-        font-size: 1rem;
-        color: #94a3b8;
-        font-weight: 500;
-    }
-    
-    /* Sidebar */
-    [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0f1419 0%, #1a202e 100%);
-        border-right: 1px solid rgba(148, 163, 184, 0.1);
-    }
-    
-    /* Contenedores */
-    .info-box {
-        background: rgba(30, 41, 59, 0.8);
-        padding: 1.5rem;
-        border-radius: 12px;
-        border-left: 4px solid #00d4ff;
-        margin: 1rem 0;
-    }
-    
-    /* Texto general */
-    .stMarkdown, .stDataFrame, .stTable {
-        color: #e2e8f0;
-    }
-    
-    /* Títulos de sección */
-    h1, h2, h3, h4 {
-        color: #f1f5f9 !important;
-    }
-    
-    /* Dividers */
-    hr {
-        border-color: rgba(148, 163, 184, 0.2) !important;
-    }
+.stApp { background: linear-gradient(135deg, #0f1419 0%, #1a1f2e 50%, #0d1117 100%); }
+.main-header { font-size: 3rem; font-weight: 800; background: linear-gradient(90deg, #00d4ff, #7b2cbf);
+-webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; padding: 1rem 0; }
+.sub-header { font-size: 1.2rem; color: #a0aec0; text-align: center; margin-bottom: 2rem; }
+[data-testid="stMetricValue"] { font-size: 2.2rem; color: #00d4ff !important; font-weight: 700; }
+[data-testid="stMetricLabel"] { color: #94a3b8; font-weight: 500; }
+h1, h2, h3 { color: #f1f5f9 !important; }
+.stMarkdown { color: #e2e8f0; }
 </style>
 """, unsafe_allow_html=True)
 
-# Header principal con logo SVG embebido
-logo_svg = """
-<svg width="80" height="80" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#00d4ff;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#7b2cbf;stop-opacity:1" />
-    </linearGradient>
-  </defs>
-  <circle cx="50" cy="50" r="45" fill="url(#grad1)" opacity="0.2"/>
-  <path d="M30 50 L45 65 L70 35" stroke="url(#grad1)" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="30" cy="50" r="4" fill="#00d4ff"/>
-  <circle cx="45" cy="65" r="4" fill="#00d4ff"/>
-  <circle cx="70" cy="35" r="4" fill="#7b2cbf"/>
-</svg>
-"""
+st.markdown('<p class="main-header"> CreditFlow Analytics</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-header">Sistema Predictivo de Riesgo Crediticio · SQL Server + MongoDB</p>', unsafe_allow_html=True)
 
-col_logo, col_title = st.columns([1, 4])
-with col_logo:
-    st.markdown(logo_svg, unsafe_allow_html=True)
-with col_title:
-    st.markdown('<p class="main-header">CreditFlow Analytics</p>', unsafe_allow_html=True)
-
-st.markdown('<p class="sub-header">Sistema Predictivo de Riesgo Crediticio | Arquitectura Híbrida SQL Server + MongoDB</p>', unsafe_allow_html=True)
-
-auth_module.init_session_state()
-
-with st.sidebar:
-    st.markdown("### 🔐 Sesión")
-    if st.session_state.authenticated:
-        st.success(f"Conectado como {st.session_state.login_profile}")
-        st.caption(f"Usuario: {st.session_state.login_user}")
-        auth_module.render_role_menu()
-    else:
-        st.info("No hay sesión activa")
-    auth_module.logout_button()
-
+# ==========================================
+# LOGIN
+# ==========================================
 if not st.session_state.authenticated:
     auth_module.login_panel()
     st.stop()
 
-# Sidebar simplificado
+# ==========================================
+# SIDEBAR
+# ==========================================
 with st.sidebar:
-    st.markdown("### 🎯 Navegación")
-    st.markdown("---")
+    st.markdown(f"### 👤 {st.session_state.login_profile}")
+    st.caption(f"Usuario: `{st.session_state.login_user}`")
+    st.divider()
     
-    st.markdown("""
-    - **📊 Dashboard**: Vista general del proyecto
-    - **📑 Dataset & Arquitectura**: Exploración de datos y modelo ER
-    - **🤖 Modelo ML & Predicciones**: Interfaz predictiva en tiempo real
-    - **🛠️ Administración BD**: Gestión de usuarios, auditoría y backups
-    """)
+    # Menú de navegación con st.page_link
+    st.markdown("### 🧭 Navegación")
     
-    st.markdown("---")
-    st.markdown("### ℹ️ Acerca del Proyecto")
+    rol_actual = st.session_state.login_profile
     
-    with st.expander("Ver detalles", expanded=False):
-        st.markdown("""
-        **Objetivo:** Diseñar e implementar una solución analítica integral que combine arquitectura híbrida con modelos ML.
-        
-        **Tecnologías:** SQL Server | MongoDB | XGBoost | Streamlit
-        """)
+    # Solo mostrar enlaces a las páginas, NO a app.py
+    if rol_actual in ["SA", "Administrador"]:
+        st.page_link("pages/0_Inicio_Auditorias.py", label=" Inicio Auditorías")
+        st.page_link("pages/1_Dataset_Arquitectura.py", label="📊 Dataset & Arquitectura")
+        st.page_link("pages/2_Modelo_ML_Predicciones.py", label="🤖 Modelo ML & Predicciones")
+        st.page_link("pages/3_Administracion_BD.py", label="🛠️ Administración BD")
+    else:  # Analista
+        st.page_link("pages/0_Inicio_Auditorias.py", label="🔎 Inicio Auditorías")
+        st.page_link("pages/1_Dataset_Arquitectura.py", label="📊 Dataset & Arquitectura")
+        st.page_link("pages/2_Modelo_ML_Predicciones.py", label="🤖 Modelo ML & Predicciones")
+    
+    st.divider()
+    auth_module.logout_button()
 
-# Contenido principal - Dashboard general
-st.markdown("---")
-
-# KPIs principales en columnas
-col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
-
+# ==========================================
+# CONTENIDO DEL DASHBOARD (app.py es el dashboard)
+# ==========================================
 try:
     conn = get_sql_connection()
     engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
     
-    query_kpis = text("""
+    df_kpis = pd.read_sql(text("""
         SELECT 
-            COUNT(DISTINCT c.id_cliente) AS total_clientes,
-            AVG(c.limite_credito) AS avg_limite_credito,
+            COUNT(DISTINCT c.id_cliente) AS total,
+            AVG(c.limite_credito) AS avg_limite,
             AVG(c.edad) AS avg_edad,
-            SUM(CAST(r.incumplimiento_proximo_mes AS INT)) * 100.0 / COUNT(*) AS tasa_incumplimiento
+            SUM(CAST(r.incumplimiento_proximo_mes AS INT)) * 100.0 / COUNT(*) AS tasa
         FROM dim_cliente c
         INNER JOIN riesgo_crediticio r ON c.id_cliente = r.id_cliente
-    """)
-    df_kpis = pd.read_sql(query_kpis, engine)
+    """), engine)
     
-    with col_kpi1:
-        st.metric("👥 Total Clientes", f"{int(df_kpis['total_clientes'][0]):,}")
-    with col_kpi2:
-        st.metric("💰 Límite Promedio", f"${df_kpis['avg_limite_credito'][0]:,.2f}")
-    with col_kpi3:
-        st.metric("📅 Edad Promedio", f"{df_kpis['avg_edad'][0]:.1f} años")
-    with col_kpi4:
-        st.metric("⚠️ Tasa Incumplimiento", f"{df_kpis['tasa_incumplimiento'][0]:.2f}%")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("👥 Clientes", f"{int(df_kpis['total'][0]):,}")
+    c2.metric("💰 Límite Promedio", f"${df_kpis['avg_limite'][0]:,.0f}")
+    c3.metric("📅 Edad Promedio", f"{df_kpis['avg_edad'][0]:.1f}")
+    c4.metric("⚠️ Tasa Default", f"{df_kpis['tasa'][0]:.2f}%")
+    
+    st.divider()
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        df_edu = pd.read_sql(text("""
+            SELECT e.nivel_educativo, COUNT(*) as cantidad
+            FROM dim_cliente c INNER JOIN dim_educacion e ON c.id_educacion = e.id_educacion
+            GROUP BY e.nivel_educativo
+        """), engine)
+        fig1 = px.pie(df_edu, values='cantidad', names='nivel_educativo',
+                     title='📚 Distribución Educativa',
+                     color_discrete_sequence=['#00d4ff', '#7b2cbf', '#2ca02c', '#ff7f0e'])
+        fig1.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                          font=dict(color='#e2e8f0'), title_font=dict(color='#00d4ff'))
+        st.plotly_chart(fig1, use_container_width=True)
+    
+    with col2:
+        df_civil = pd.read_sql(text("""
+            SELECT ec.descripcion_estado_civil, COUNT(*) as cantidad
+            FROM dim_cliente c INNER JOIN dim_estado_civil ec ON c.id_estado_civil = ec.id_estado_civil
+            GROUP BY ec.descripcion_estado_civil
+        """), engine)
+        fig2 = px.bar(df_civil, x='descripcion_estado_civil', y='cantidad',
+                     title='💍 Estado Civil', color='cantidad',
+                     color_continuous_scale=['#00d4ff', '#7b2cbf'])
+        fig2.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                          font=dict(color='#e2e8f0'), title_font=dict(color='#00d4ff'))
+        st.plotly_chart(fig2, use_container_width=True)
     
     conn.close()
 except Exception as e:
-    st.error(f"Error al cargar KPIs: {str(e)}")
-
-st.markdown("---")
-
-# Gráficos principales
-col_graf1, col_graf2 = st.columns(2)
-
-with col_graf1:
-    try:
-        conn = get_sql_connection()
-        engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
-        
-        # Distribución por educación
-        query_edu = text("""
-            SELECT e.nivel_educativo, COUNT(*) as cantidad
-            FROM dim_cliente c
-            INNER JOIN dim_educacion e ON c.id_educacion = e.id_educacion
-            GROUP BY e.nivel_educativo
-            ORDER BY cantidad DESC
-        """)
-        df_edu = pd.read_sql(query_edu, engine)
-        
-        fig_pie = px.pie(df_edu, values='cantidad', names='nivel_educativo', 
-                         title='📚 Distribución por Nivel Educativo',
-                         color_discrete_sequence=['#00d4ff', '#7b2cbf', '#2ca02c', '#ff7f0e', '#e377c2'])
-        fig_pie.update_traces(textposition='inside', textinfo='percent+label')
-        fig_pie.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='#e2e8f0', size=12),
-            title_font=dict(color='#00d4ff', size=16)
-        )
-        st.plotly_chart(fig_pie, use_container_width=True)
-        
-        conn.close()
-    except Exception as e:
-        st.error(f"Error al cargar gráfico educativo: {str(e)}")
-
-with col_graf2:
-    try:
-        conn = get_sql_connection()
-        engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
-        
-        # Distribución por estado civil
-        query_civil = text("""
-            SELECT ec.descripcion_estado_civil, COUNT(*) as cantidad
-            FROM dim_cliente c
-            INNER JOIN dim_estado_civil ec ON c.id_estado_civil = ec.id_estado_civil
-            GROUP BY ec.descripcion_estado_civil
-        """)
-        df_civil = pd.read_sql(query_civil, engine)
-        
-        fig_bar = px.bar(df_civil, x='descripcion_estado_civil', y='cantidad',
-                         title='💍 Distribución por Estado Civil',
-                         color='cantidad',
-                         color_continuous_scale=['#00d4ff', '#7b2cbf'])
-        fig_bar.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='#e2e8f0', size=12),
-            title_font=dict(color='#00d4ff', size=16),
-            xaxis=dict(title="Estado Civil", tickfont=dict(color='#94a3b8')),
-            yaxis=dict(title="Cantidad", tickfont=dict(color='#94a3b8'))
-        )
-        st.plotly_chart(fig_bar, use_container_width=True)
-        
-        conn.close()
-    except Exception as e:
-        st.error(f"Error al cargar gráfico estado civil: {str(e)}")
-
-# Footer simplificado
-st.markdown("---")
-st.markdown("<div style='text-align: center; color: #64748b; padding: 1rem;'><small>CreditFlow Analytics © 2025 | Arquitectura Híbrida SQL Server + MongoDB</small></div>", unsafe_allow_html=True)
+    st.error(f"❌ Error: {str(e)}")

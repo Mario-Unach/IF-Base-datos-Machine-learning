@@ -1,666 +1,126 @@
 import streamlit as st
 import pandas as pd
-import sys
-import importlib
 from pathlib import Path
+import sys
 from sqlalchemy import create_engine, text
+from db_connections import get_sql_connection, get_mongo_connection
 
-# Agregar el directorio Streamlit al path para importar db_connections
+# 1. Agregar la carpeta raíz (Streamlit/) al path
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from db_connections import get_sql_connection, get_mongo_db, get_mongo_connection
-import auth as auth_module
-auth_module = importlib.reload(auth_module)
-from datetime import datetime
 
-# Configuración de página
-st.set_page_config(
-    page_title="Administración de Base de Datos",
-    page_icon="🛠️",
-    layout="wide"
-)
+# 2. Importar el módulo de autenticación
+import auth
 
-# CSS personalizado - Tema oscuro consistente
+# 3. Inicializar y proteger la página
+auth.init_session_state()
+auth.require_role(["Administrador"]) # Roles permitidos
+
+st.set_page_config(page_title="Administración BD", page_icon="🛠️", layout="wide")
+
 st.markdown("""
 <style>
-    /* Fondo principal */
-    .stApp {
-        background: linear-gradient(135deg, #0f1419 0%, #1a1f2e 50%, #0d1117 100%);
-    }
-    
-    /* Header de página */
-    .page-header {
-        font-size: 2.8rem;
-        font-weight: 800;
-        background: linear-gradient(90deg, #00d4ff, #7b2cbf);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        padding: 1.5rem 0;
-        margin-bottom: 2rem;
-    }
-    
-    /* Tabs */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 24px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        background: rgba(30, 41, 59, 0.6);
-        border-radius: 8px;
-        padding: 8px 16px;
-        color: #e2e8f0;
-    }
-    .stTabs [aria-selected="true"] {
-        background: linear-gradient(135deg, rgba(0, 212, 255, 0.2), rgba(123, 44, 191, 0.2));
-        border: 1px solid rgba(0, 212, 255, 0.3);
-        color: #00d4ff;
-    }
-    
-    /* User cards */
-    .user-card {
-        background: linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%);
-        padding: 1.5rem;
-        border-radius: 15px;
-        border: 1px solid rgba(148, 163, 184, 0.1);
-        margin: 1rem 0;
-    }
-    
-    /* Info boxes */
-    .info-box {
-        background: rgba(30, 41, 59, 0.8);
-        padding: 1.5rem;
-        border-radius: 12px;
-        border-left: 4px solid #00d4ff;
-        margin: 1rem 0;
-    }
-    
-    /* Texto general */
-    .stMarkdown, .stDataFrame, .stTable {
-        color: #e2e8f0;
-    }
-    
-    h1, h2, h3, h4 {
-        color: #f1f5f9 !important;
-    }
+.stApp { background: linear-gradient(135deg, #0f1419 0%, #1a1f2e 50%, #0d1117 100%); }
+.page-header { font-size: 2.6rem; font-weight: 800; background: linear-gradient(90deg, #00d4ff, #7b2cbf);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+h1, h2, h3 { color: #f1f5f9 !important; }
+.stMarkdown { color: #e2e8f0; }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<p class="page-header">🛠️ Administración de Base de Datos</p>', unsafe_allow_html=True)
-
-auth_module.require_role("SA", "Administrador")
+st.markdown('<p class="page-header">🛠️ Administración BD</p>', unsafe_allow_html=True)
 
 with st.sidebar:
-    st.markdown("### 🔐 Sesión")
-    st.caption(f"Usuario: {st.session_state.login_user}")
-    st.caption(f"Perfil: {st.session_state.login_profile}")
-    auth_module.logout_button()
-
-# Pestañas principales
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-    "👥 Usuarios y Roles",
-    "🔒 Auditoría y Triggers",
-    "💾 Backups y DRP",
-    "❤️ Health Check",
-    "⌨️ Terminal SQL",
-    "👤 Administrar Usuarios"
-])
-
-with tab1:
-    st.markdown("### 👥 Gestión de Usuarios y Roles")
-    
-    st.info("""
-    **Roles Implementados:**
-    
-    - **rol_analista:** Permisos de lectura sobre vistas y tablas dimensionales
-    - **rol_admin:** Control total de la infraestructura (CONTROL ON DATABASE)
-    
-    **Usuarios Creados:**
-    - **analista:** Miembro de rol_analista (solo lectura)
-    - **admin:** Miembro de rol_admin (permisos completos)
-    """)
-    
-    col_user1, col_user2 = st.columns(2)
-    
-    with col_user1:
-        st.markdown("""
-        <div class="user-card">
-            <h3>👤 Analista</h3>
-            <p><strong>Login:</strong> analista</p>
-            <p><strong>Rol:</strong> rol_analista</p>
-            <p><strong>Permisos:</strong></p>
-            <ul>
-                <li>SELECT en vistas ML</li>
-                <li>SELECT en tablas dimensión</li>
-                <li>SELECT en historial_pagos</li>
-                <li>❌ Sin INSERT/UPDATE/DELETE</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col_user2:
-        st.markdown("""
-        <div class="user-card">
-            <h3>👨‍💼 Administrador</h3>
-            <p><strong>Login:</strong> admin</p>
-            <p><strong>Rol:</strong> rol_admin</p>
-            <p><strong>Permisos:</strong></p>
-            <ul>
-                <li>CONTROL ON DATABASE</li>
-                <li>✅ Todos los privilegios</li>
-                <li>Gestión completa de BD</li>
-                <li>Ejecución de backups</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
-    
+    st.markdown(f"### 👤 {st.session_state.login_profile}")
+    st.caption(f"`{st.session_state.login_user}`")
     st.divider()
-    
-    st.markdown("### 📜 Script SQL de Creación de Usuarios")
-    
-    sql_usuarios = """
-    -- Crear roles
-    CREATE ROLE rol_analista;
-    CREATE ROLE rol_admin;
-    
-    -- Asignar permisos al rol_analista (solo lectura)
-    GRANT SELECT ON vw_ml_dataset TO rol_analista;
-    GRANT SELECT ON vw_cliente_detallado TO rol_analista;
-    GRANT SELECT ON dim_cliente TO rol_analista;
-    GRANT SELECT ON dim_sexo TO rol_analista;
-    GRANT SELECT ON dim_educacion TO rol_analista;
-    GRANT SELECT ON dim_estado_civil TO rol_analista;
-    GRANT SELECT ON historial_pagos TO rol_analista;
-    GRANT SELECT ON riesgo_crediticio TO rol_analista;
-    
-    -- Permisos al rol_admin (todos los privilegios)
-    GRANT CONTROL ON DATABASE::CC_Client TO rol_admin;
-    
-    -- Crear logins con contraseña (nivel servidor)
-    CREATE LOGIN analista WITH PASSWORD = 'ContraseñaSegura123!';
-    CREATE LOGIN admin WITH PASSWORD = 'ContraseñaSegura456!';
-    
-    -- Crear usuarios en la base vinculados a los logins
-    CREATE USER analista FOR LOGIN analista;
-    CREATE USER admin FOR LOGIN admin;
-    
-    -- Asignar roles a los usuarios
-    ALTER ROLE rol_analista ADD MEMBER analista;
-    ALTER ROLE rol_admin ADD MEMBER admin;
-    """
-    
-    with st.expander("📜 Ver Script SQL Completo"):
-        st.code(sql_usuarios, language='sql')
-    
-    if st.button("🔄 Verificar Usuarios Actuales"):
-        try:
-            conn = get_sql_connection()
-            engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
-            
-            query_usuarios = """
-                SELECT 
-                    u.name AS usuario,
-                    r.name AS rol,
-                    l.create_date AS fecha_creacion
-                FROM sys.database_principals u
-                LEFT JOIN sys.database_role_members rm ON u.principal_id = rm.member_principal_id
-                LEFT JOIN sys.database_principals r ON rm.role_principal_id = r.principal_id
-                LEFT JOIN sys.server_principals l ON u.sid = l.sid
-                WHERE u.type = 'S'
-                ORDER BY u.name
-            """
-            
-            df_usuarios = pd.read_sql(text(query_usuarios), engine)
-            st.dataframe(df_usuarios, use_container_width=True)
-            
-            conn.close()
-            
-        except Exception as e:
-            st.error(f"Error al consultar usuarios: {str(e)}")
-
-with tab2:
-    st.markdown("### 🔒 Sistema de Auditoría con Triggers")
-    
-    st.success("""
-    **Trigger Implementado:** `trg_Auditoria_Riesgo`
-    
-    Este trigger registra automáticamente en la tabla `auditoria_cambios`:
-    - ✅ Inserciones (INSERT)
-    - ✅ Actualizaciones (UPDATE)
-    - ✅ Eliminaciones (DELETE)
-    """)
-    
+    auth.render_role_menu()
     st.divider()
-    
-    st.markdown("### 📊 Registros de Auditoría Recientes")
-    
-    try:
-        conn = get_sql_connection()
-        engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
-        
-        query_auditoria = """
-            SELECT TOP 50
-                id_auditoria,
-                tabla_afectada,
-                operacion,
-                id_registro_afectado,
-                usuario,
-                fecha_cambio,
-                datos_antes,
-                datos_despues
-            FROM auditoria_cambios
-            ORDER BY fecha_cambio DESC
-        """
-        
-        df_auditoria = pd.read_sql(text(query_auditoria), engine)
-        
-        if not df_auditoria.empty:
-            st.dataframe(df_auditoria, use_container_width=True)
-        else:
-            st.info("ℹ️ No hay registros de auditoría aún.")
-        
-        conn.close()
-        
-    except Exception as e:
-        st.error(f"Error al cargar auditoría: {str(e)}")
-    
-    st.divider()
-    
-    st.markdown("### 📜 Código del Trigger")
-    
-    trigger_code = """
-CREATE OR ALTER TRIGGER trg_Auditoria_Riesgo
-ON riesgo_crediticio
-AFTER INSERT, UPDATE, DELETE
-AS
-BEGIN
-    SET NOCOUNT ON;
 
-    IF EXISTS (SELECT * FROM inserted) AND NOT EXISTS (SELECT * FROM deleted)
-    BEGIN
-        INSERT INTO auditoria_cambios (tabla_afectada, operacion, id_registro_afectado, datos_despues)
-        SELECT 'riesgo_crediticio', 'I', id_cliente, 
-               CONVERT(NVARCHAR(MAX), incumplimiento_proximo_mes)
-        FROM inserted;
-    END
+tab1, tab2, tab3, tab4 = st.tabs(["👥 Usuarios", "💾 Backups", "❤️ Health Check", "⌨️ Terminal SQL"])
 
-    IF EXISTS (SELECT * FROM inserted) AND EXISTS (SELECT * FROM deleted)
-    BEGIN
-        INSERT INTO auditoria_cambios (tabla_afectada, operacion, id_registro_afectado, datos_antes, datos_despues)
-        SELECT 'riesgo_crediticio', 'U', i.id_cliente,
-               CONVERT(NVARCHAR(MAX), d.incumplimiento_proximo_mes),
-               CONVERT(NVARCHAR(MAX), i.incumplimiento_proximo_mes)
-        FROM inserted i
-        JOIN deleted d ON i.id_cliente = d.id_cliente;
-    END
-
-    IF EXISTS (SELECT * FROM deleted) AND NOT EXISTS (SELECT * FROM inserted)
-    BEGIN
-        INSERT INTO auditoria_cambios (tabla_afectada, operacion, id_registro_afectado, datos_antes)
-        SELECT 'riesgo_crediticio', 'D', id_cliente, 
-               CONVERT(NVARCHAR(MAX), incumplimiento_proximo_mes)
-        FROM deleted;
-    END
-END;
-    """
+try:
+    conn = get_sql_connection()
+    engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
     
-    with st.expander("📜 Ver Código del Trigger"):
-        st.code(trigger_code, language='sql')
-
-with tab3:
-    st.markdown("### 💾 Estrategia de Backups y DRP")
+    with tab1:
+        st.subheader("👥 Usuarios y Roles")
+        df_users = pd.read_sql(text("""
+            SELECT u.name AS usuario, r.name AS rol, l.create_date
+            FROM sys.database_principals u
+            LEFT JOIN sys.database_role_members rm ON u.principal_id = rm.member_principal_id
+            LEFT JOIN sys.database_principals r ON rm.role_principal_id = r.principal_id
+            LEFT JOIN sys.server_principals l ON u.sid = l.sid
+            WHERE u.type = 'S' AND u.name NOT IN ('dbo', 'guest')
+            ORDER BY u.name
+        """), engine)
+        st.dataframe(df_users, use_container_width=True)
     
-    st.warning("""
-    **Plan de Recuperación ante Desastres (DRP)**
-    
-    La estrategia implementada incluye tres tipos de backup:
-    
-    1. **Backup Completo (Full):** Copia completa de la base de datos
-    2. **Backup Diferencial (Diff):** Cambios desde el último full
-    3. **Backup de Log Transaccional:** Todas las transacciones
-    """)
-    
-    col_backup1, col_backup2 = st.columns(2)
-    
-    with col_backup1:
-        st.markdown("""
-        #### 📋 Scripts de Backup
+    with tab2:
+        st.subheader("💾 Ejecutar Backup")
+        tipo = st.selectbox("Tipo:", ["Completo (Full)", "Diferencial (Diff)", "Log Transaccional"])
         
-        **Backup Completo:**
-        ```sql
-        BACKUP DATABASE CC_Client
-        TO DISK = '/var/opt/mssql/backups/CC_Client_Full.bak'
-        WITH FORMAT, INIT, NAME = 'Full Backup CC_Client';
-        ```
-        
-        **Backup Diferencial:**
-        ```sql
-        BACKUP DATABASE CC_Client
-        TO DISK = '/var/opt/mssql/backups/CC_Client_Diff.bak'
-        WITH DIFFERENTIAL;
-        ```
-        """)
-    
-    with col_backup2:
-        st.markdown("""
-        #### 🔄 Proceso de Restauración
-        
-        **Paso 1:** Restaurar FULL con NORECOVERY
-        ```sql
-        RESTORE DATABASE CC_Client
-        FROM DISK = '/var/opt/mssql/backups/CC_Client_Full.bak'
-        WITH NORECOVERY;
-        ```
-        
-        **Paso 2:** Restaurar DIFF con NORECOVERY
-        ```sql
-        RESTORE DATABASE CC_Client
-        FROM DISK = '/var/opt/mssql/backups/CC_Client_Diff.bak'
-        WITH NORECOVERY;
-        ```
-        
-        **Paso 3:** Restaurar LOG con RECOVERY
-        ```sql
-        RESTORE LOG CC_Client
-        FROM DISK = '/var/opt/mssql/backups/CC_Client_Log.trn'
-        WITH RECOVERY;
-        ```
-        """)
-    
-    st.divider()
-    
-    st.markdown("### ⚡ Ejecutar Backup Ahora")
-    
-    backup_type = st.selectbox(
-        "Selecciona el tipo de backup:",
-        ["Completo (Full)", "Diferencial (Diff)", "Log Transaccional"]
-    )
-    
-    if st.button("🚀 Ejecutar Backup", type="primary"):
-        try:
-            conn = get_sql_connection()
-            engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
-            cursor = conn.cursor()
-            
-            if backup_type == "Completo (Full)":
-                backup_query = """
-                BACKUP DATABASE CC_Client
-                TO DISK = '/var/opt/mssql/backups/CC_Client_Full_Backup.bak'
-                WITH FORMAT, INIT, NAME = 'Full Backup CC_Client - Manual';
-                """
-            elif backup_type == "Diferencial (Diff)":
-                backup_query = """
-                BACKUP DATABASE CC_Client
-                TO DISK = '/var/opt/mssql/backups/CC_Client_Diff_Backup.bak'
-                WITH DIFFERENTIAL, NAME = 'Differential Backup CC_Client - Manual';
-                """
-            else:
-                backup_query = """
-                BACKUP LOG CC_Client
-                TO DISK = '/var/opt/mssql/backups/CC_Client_Log_Backup.trn'
-                WITH NAME = 'Log Backup CC_Client - Manual';
-                """
-            
-            cursor.execute(backup_query)
-            conn.commit()
-            
-            st.success("✅ Backup ejecutado exitosamente!")
-            
-            conn.close()
-            
-        except Exception as e:
-            st.error(f"❌ Error al ejecutar backup: {str(e)}")
-
-with tab4:
-    st.markdown("### ❤️ Health Check de la Base de Datos")
-    
-    st.info("Verifica el estado actual de la infraestructura de bases de datos")
-    
-    col_health1, col_health2 = st.columns(2)
-    
-    with col_health1:
-        st.markdown("**SQL Server**")
-        try:
-            conn = get_sql_connection()
-            engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
-            cursor = conn.cursor()
-            cursor.execute("SELECT @@VERSION")
-            version = cursor.fetchone()[0]
-            st.success(f"✅ Conectado")
-            st.caption(version[:200] + "...")
-            conn.close()
-        except Exception as e:
-            st.error(f"❌ Error: {str(e)}")
-    
-    with col_health2:
-        st.markdown("**MongoDB**")
-        try:
-            mongo_client = get_mongo_connection()
-            server_info = mongo_client.server_info()
-            st.success(f"✅ Conectado")
-            st.caption(f"Versión: {server_info.get('version', 'Desconocida')}")
-            mongo_client.close()
-        except Exception as e:
-            st.error(f"❌ Error: {str(e)}")
-    
-    st.divider()
-    
-    st.markdown("#### 📊 Métricas de SQL Server")
-    
-    try:
-        conn = get_sql_connection()
-        engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
-        
-        metrics_query = """
-            SELECT 
-                (SELECT COUNT(*) FROM dim_cliente) AS total_clientes,
-                (SELECT COUNT(*) FROM historial_pagos) AS total_historial,
-                (SELECT COUNT(*) FROM auditoria_cambios) AS total_auditoria,
-                (SELECT COUNT(*) FROM sys.indexes) AS total_indices
-        """
-        
-        df_metrics = pd.read_sql(text(metrics_query), engine)
-        
-        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-        
-        with col_m1:
-            st.metric("👥 Clientes", f"{int(df_metrics['total_clientes'][0]):,}")
-        
-        with col_m2:
-            st.metric("📜 Historial", f"{int(df_metrics['total_historial'][0]):,}")
-        
-        with col_m3:
-            st.metric("🔒 Auditorías", f"{int(df_metrics['total_auditoria'][0]):,}")
-        
-        with col_m4:
-            st.metric("📇 Índices", f"{int(df_metrics['total_indices'][0]):,}")
-        
-        conn.close()
-        
-    except Exception as e:
-        st.error(f"Error al cargar métricas: {str(e)}")
-
-with tab5:
-    st.markdown("### ⌨️ Terminal SQL Interactiva")
-    
-    st.warning("⚠️ Usa esta herramienta con precaución. Solo para usuarios con rol admin.")
-    
-    quick_queries = {
-        "Ver todas las tablas": "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'",
-        "Contar registros por tabla": """
-            SELECT t.name AS tabla, p.rows AS registros
-            FROM sys.tables t
-            INNER JOIN sys.partitions p ON t.object_id = p.OBJECT_ID
-            WHERE p.index_id IN (0,1)
-            ORDER BY p.rows DESC
-        """,
-        "Ver triggers": "SELECT name, parent_id FROM sys.triggers",
-        "Ver roles": "SELECT name FROM sys.database_principals WHERE type = 'R'"
-    }
-    
-    selected_query = st.selectbox("Selecciona una consulta rápida:", list(quick_queries.keys()))
-    
-    if st.button("▶️ Ejecutar Consulta Rápida"):
-        try:
-            conn = get_sql_connection()
-            engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
-            df = pd.read_sql(text(quick_queries[selected_query]), engine)
-            st.success(f"✅ {len(df)} registros")
-            st.dataframe(df, use_container_width=True)
-            conn.close()
-        except Exception as e:
-            st.error(f"❌ Error: {str(e)}")
-    
-    st.divider()
-    
-    st.markdown("#### 📝 Editor SQL Avanzado")
-    
-    sql_code = st.text_area(
-        "Escribe tu consulta SQL:",
-        height=200,
-        placeholder="SELECT TOP 100 * FROM dim_cliente..."
-    )
-    
-    if st.button("🚀 Ejecutar", type="primary"):
-        if sql_code.strip():
+        if st.button("🚀 Ejecutar Backup", type="primary"):
+            queries = {
+                "Completo (Full)": "BACKUP DATABASE CC_Client TO DISK = '/var/opt/mssql/backups/CC_Client_Full.bak' WITH FORMAT, INIT",
+                "Diferencial (Diff)": "BACKUP DATABASE CC_Client TO DISK = '/var/opt/mssql/backups/CC_Client_Diff.bak' WITH DIFFERENTIAL",
+                "Log Transaccional": "BACKUP LOG CC_Client TO DISK = '/var/opt/mssql/backups/CC_Client_Log.trn'"
+            }
             try:
-                conn = get_sql_connection()
-                engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
-                
-                with st.expander("📜 SQL a ejecutar"):
-                    st.code(sql_code, language='sql')
-                
-                df_result = pd.read_sql(text(sql_code), engine)
-                
-                st.success(f"✅ Consulta ejecutada: {len(df_result)} registros")
-                st.dataframe(df_result, use_container_width=True)
-                
-                conn.close()
-                
+                cursor = conn.cursor()
+                cursor.execute(queries[tipo])
+                conn.commit()
+                st.success(f"✅ Backup **{tipo}** ejecutado correctamente")
             except Exception as e:
-                st.error(f"❌ Error al ejecutar consulta: {str(e)}")
-        else:
-            st.warning("⚠️ Por favor escribe una consulta SQL")
-
-with tab6:
-    st.markdown("### 👤 Administración de Usuarios y Roles")
-    st.info("Desde aquí puedes consultar usuarios, crear usuarios de base de datos y asignar o quitar roles.")
-
-    try:
-        conn = get_sql_connection()
-        engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
-
-        st.markdown("#### 📋 Usuarios y roles actuales")
-        query_usuarios = """
-            SELECT
-                dp.name AS usuario,
-                dp.type_desc AS tipo_principal,
-                ISNULL(rp.name, 'Sin rol') AS rol,
-                dp.create_date,
-                dp.modify_date
-            FROM sys.database_principals dp
-            LEFT JOIN sys.database_role_members drm ON dp.principal_id = drm.member_principal_id
-            LEFT JOIN sys.database_principals rp ON drm.role_principal_id = rp.principal_id
-            WHERE dp.type IN ('S', 'U', 'G')
-              AND dp.name NOT IN ('dbo', 'guest', 'INFORMATION_SCHEMA', 'sys')
-            ORDER BY dp.name
-        """
-
-        df_usuarios = pd.read_sql(text(query_usuarios), engine)
-        st.dataframe(df_usuarios, use_container_width=True)
-
+                st.error(f"❌ Error: {str(e)}")
+    
+    with tab3:
+        st.subheader("❤️ Estado de Servicios")
+        c1, c2 = st.columns(2)
+        with c1:
+            try:
+                version = pd.read_sql(text("SELECT @@VERSION AS v"), engine).iloc[0]['v']
+                st.success("✅ SQL Server Conectado")
+                st.caption(version[:150] + "...")
+            except Exception as e:
+                st.error(f"❌ SQL Server: {str(e)}")
+        
+        with c2:
+            try:
+                client = get_mongo_connection()
+                info = client.server_info()
+                st.success("✅ MongoDB Conectado")
+                st.caption(f"Versión: {info.get('version', 'N/A')}")
+                client.close()
+            except Exception as e:
+                st.error(f"❌ MongoDB: {str(e)}")
+        
         st.divider()
-        col_u1, col_u2 = st.columns(2)
-
-        with col_u1:
-            st.markdown("#### ➕ Crear usuario de base de datos")
-            nuevo_usuario = st.text_input("Nombre del usuario DB", key="nuevo_usuario_db")
-            nueva_password = st.text_input("Contraseña del login", type="password", key="nuevo_password_login")
-            crear_login = st.checkbox("Crear también el login en SQL Server", value=True, key="crear_login_usuario")
-            rol_asignar = st.selectbox("Rol a asignar", ["rol_analista", "rol_admin"], key="rol_usuario_nuevo")
-
-            if st.button("🆕 Crear usuario", type="primary"):
-                if not nuevo_usuario.strip():
-                    st.warning("⚠️ Escribe un nombre de usuario.")
-                elif crear_login and not nueva_password.strip():
-                    st.warning("⚠️ Escribe una contraseña para el login.")
-                else:
-                    try:
-                        with conn.cursor() as cursor:
-                            if crear_login:
-                                cursor.execute(f"IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = '{nuevo_usuario}') CREATE LOGIN [{nuevo_usuario}] WITH PASSWORD = '{nueva_password}'")
-                            cursor.execute(f"IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '{nuevo_usuario}') CREATE USER [{nuevo_usuario}] FOR LOGIN [{nuevo_usuario}]")
-                            cursor.execute(f"ALTER ROLE [{rol_asignar}] ADD MEMBER [{nuevo_usuario}]")
-                        conn.commit()
-                        st.success("✅ Usuario creado y asignado correctamente")
-                        st.rerun()
-                    except Exception as e:
-                        conn.rollback()
-                        st.error(f"❌ No se pudo crear el usuario: {str(e)}")
-
-        with col_u2:
-            st.markdown("#### 🔧 Administrar usuario existente")
-            usuario_existente = st.text_input("Usuario DB existente", key="usuario_existente_admin")
-            rol_existente = st.selectbox("Rol", ["rol_analista", "rol_admin"], key="rol_existente_admin")
-
-            col_acc1, col_acc2 = st.columns(2)
-            with col_acc1:
-                if st.button("➕ Agregar a rol"):
-                    if usuario_existente.strip():
-                        try:
-                            with conn.cursor() as cursor:
-                                cursor.execute(f"ALTER ROLE [{rol_existente}] ADD MEMBER [{usuario_existente}]")
-                            conn.commit()
-                            st.success("✅ Usuario agregado al rol")
-                            st.rerun()
-                        except Exception as e:
-                            conn.rollback()
-                            st.error(f"❌ Error al agregar rol: {str(e)}")
-                    else:
-                        st.warning("⚠️ Escribe un usuario existente.")
-
-            with col_acc2:
-                if st.button("➖ Quitar de rol"):
-                    if usuario_existente.strip():
-                        try:
-                            with conn.cursor() as cursor:
-                                cursor.execute(f"ALTER ROLE [{rol_existente}] DROP MEMBER [{usuario_existente}]")
-                            conn.commit()
-                            st.success("✅ Usuario removido del rol")
-                            st.rerun()
-                        except Exception as e:
-                            conn.rollback()
-                            st.error(f"❌ Error al quitar rol: {str(e)}")
-                    else:
-                        st.warning("⚠️ Escribe un usuario existente.")
-
-            st.divider()
-            st.markdown("#### 🗑️ Eliminar usuario")
-            eliminar_usuario = st.text_input("Usuario a eliminar", key="usuario_eliminar_admin")
-
-            if st.button("Eliminar usuario y login"):
-                if eliminar_usuario.strip():
-                    try:
-                        with conn.cursor() as cursor:
-                            cursor.execute("""
-                                DECLARE @sql NVARCHAR(MAX) = N'';
-                                SELECT @sql += N'ALTER ROLE [' + rp.name + '] DROP MEMBER [' + dp.name + '];'
-                                FROM sys.database_principals dp
-                                INNER JOIN sys.database_role_members drm ON dp.principal_id = drm.member_principal_id
-                                INNER JOIN sys.database_principals rp ON drm.role_principal_id = rp.principal_id
-                                WHERE dp.name = ?;
-                                EXEC sp_executesql @sql;
-                            """, eliminar_usuario)
-                            cursor.execute(f"IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '{eliminar_usuario}') DROP USER [{eliminar_usuario}]")
-                            cursor.execute(f"IF EXISTS (SELECT 1 FROM sys.server_principals WHERE name = '{eliminar_usuario}') DROP LOGIN [{eliminar_usuario}]")
-                        conn.commit()
-                        st.success("✅ Usuario eliminado")
-                        st.rerun()
-                    except Exception as e:
-                        conn.rollback()
-                        st.error(f"❌ Error al eliminar usuario: {str(e)}")
-                else:
-                    st.warning("⚠️ Escribe el usuario a eliminar.")
-
-        conn.close()
-
-    except Exception as e:
-        st.error(f"❌ Error en administración de usuarios: {str(e)}")
+        metrics = pd.read_sql(text("""
+            SELECT 
+                (SELECT COUNT(*) FROM dim_cliente) AS clientes,
+                (SELECT COUNT(*) FROM historial_pagos) AS historial,
+                (SELECT COUNT(*) FROM auditoria_cambios) AS auditorias,
+                (SELECT COUNT(*) FROM sys.indexes) AS indices
+        """), engine)
+        
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("👥 Clientes", f"{int(metrics.iloc[0]['clientes']):,}")
+        m2.metric("📜 Historial", f"{int(metrics.iloc[0]['historial']):,}")
+        m3.metric("🔒 Auditorías", f"{int(metrics.iloc[0]['auditorias']):,}")
+        m4.metric("📇 Índices", f"{int(metrics.iloc[0]['indices']):,}")
+    
+    with tab4:
+        st.subheader("⌨️ Terminal SQL")
+        st.warning("⚠️ Solo para administradores")
+        sql = st.text_area("SQL:", height=150, placeholder="SELECT TOP 10 * FROM dim_cliente")
+        if st.button("🚀 Ejecutar", type="primary"):
+            if sql.strip():
+                try:
+                    df_r = pd.read_sql(text(sql), engine)
+                    st.dataframe(df_r, use_container_width=True)
+                except Exception as e:
+                    st.error(f"❌ {str(e)}")
+    
+    conn.close()
+except Exception as e:
+    st.error(f"❌ Error: {str(e)}")
