@@ -23,17 +23,17 @@ AUTH_PROFILES = {
 ROLE_PAGES = {
     "SA": [
         ("🏠 CreditFlow Analytics", "app.py"),
-        (" Inicio Auditorías", "pages/0_Inicio_Auditorias.py"),
+        ("Inicio Auditorías", "pages/0_Inicio_Auditorias.py"),
         ("📊 Dataset & Arquitectura", "pages/1_Dataset_Arquitectura.py"),
-        (" Modelo ML & Predicciones", "pages/2_Modelo_ML_Predicciones.py"),
+        ("🤖 Modelo ML & Predicciones", "pages/2_Modelo_ML_Predicciones.py"),
         ("🛠️ Administración BD", "pages/3_Administracion_BD.py"),
     ],
     "Administrador": [
         ("🏠 CreditFlow Analytics", "app.py"),
-        (" Inicio Auditorías", "pages/0_Inicio_Auditorias.py"),
+        ("Inicio Auditorías", "pages/0_Inicio_Auditorias.py"),
         ("📊 Dataset & Arquitectura", "pages/1_Dataset_Arquitectura.py"),
         ("🤖 Modelo ML & Predicciones", "pages/2_Modelo_ML_Predicciones.py"),
-        ("️ Administración BD", "pages/3_Administracion_BD.py"),
+        ("🛠️ Administración BD", "pages/3_Administracion_BD.py"),
     ],
     "Analista": [
         ("🏠 CreditFlow Analytics", "app.py"),

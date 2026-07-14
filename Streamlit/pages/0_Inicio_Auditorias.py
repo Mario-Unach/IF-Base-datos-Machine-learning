@@ -69,6 +69,100 @@ try:
     
     st.divider()
     
+    # Obtener todas las tablas de la base de datos
+    st.subheader("📁 Tablas de la Base de Datos")
+    tablas_query = text("""
+        SELECT TABLE_SCHEMA, TABLE_NAME 
+        FROM INFORMATION_SCHEMA.TABLES 
+        WHERE TABLE_TYPE = 'BASE TABLE' 
+        AND TABLE_NAME NOT IN ('auditoria_cambios', 'sysdiagrams')
+        ORDER BY TABLE_SCHEMA, TABLE_NAME
+    """)
+    tablas_df = pd.read_sql(tablas_query, engine)
+    
+    if not tablas_df.empty:
+        # Crear lista de tablas completas (schema.table)
+        tablas_df['full_name'] = tablas_df['TABLE_SCHEMA'] + '.' + tablas_df['TABLE_NAME']
+        tabla_seleccionada = st.selectbox(
+            "Selecciona una tabla para auditar:",
+            options=["Todas"] + list(tablas_df['full_name']),
+            index=0
+        )
+        
+        st.divider()
+        
+        # Función para obtener estadísticas de una tabla específica o todas
+        def get_table_stats(table_filter=None):
+            if table_filter and table_filter != "Todas":
+                schema, table = table_filter.split('.')
+                where_clause = f"AND t.TABLE_SCHEMA = '{schema}' AND t.TABLE_NAME = '{table}'"
+            else:
+                where_clause = ""
+            
+            query = text(f"""
+                SELECT 
+                    t.TABLE_SCHEMA,
+                    t.TABLE_NAME,
+                    p.rows AS row_count,
+                    SUM(a.used_pages) * 8 AS size_kb
+                FROM INFORMATION_SCHEMA.TABLES t
+                INNER JOIN sys.tables st ON t.TABLE_NAME = st.name AND t.TABLE_SCHEMA = SCHEMA_NAME(st.schema_id)
+                INNER JOIN sys.indexes i ON st.object_id = i.object_id
+                INNER JOIN sys.partitions p ON i.object_id = p.object_id AND i.index_id = p.index_id
+                INNER JOIN sys.allocation_units a ON p.partition_id = a.container_id
+                WHERE t.TABLE_TYPE = 'BASE TABLE' 
+                AND t.TABLE_NAME NOT IN ('auditoria_cambios', 'sysdiagrams')
+                {where_clause}
+                GROUP BY t.TABLE_SCHEMA, t.TABLE_NAME, p.rows
+                ORDER BY p.rows DESC
+            """)
+            return pd.read_sql(query, engine)
+        
+        stats_df = get_table_stats(tabla_seleccionada)
+        
+        if not stats_df.empty:
+            st.subheader("📊 Estadísticas de Tablas")
+            
+            # Mostrar métricas resumen
+            total_tablas = len(stats_df)
+            total_filas = stats_df['row_count'].sum()
+            total_size_kb = stats_df['size_kb'].sum()
+            avg_filas = int(total_filas / total_tablas) if total_tablas > 0 else 0
+            
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Total Tablas", total_tablas)
+            m2.metric("Total Filas", f"{total_filas:,}")
+            m3.metric("Espacio Total", f"{total_size_kb / 1024:.2f} MB")
+            m4.metric("Promedio Filas/Tabla", f"{avg_filas:,}")
+            
+            st.divider()
+            
+            # Mostrar tabla con detalles
+            st.dataframe(
+                stats_df[['TABLE_SCHEMA', 'TABLE_NAME', 'row_count', 'size_kb']],
+                use_container_width=True,
+                height=400,
+                column_config={
+                    "TABLE_SCHEMA": "Schema",
+                    "TABLE_NAME": "Tabla",
+                    "row_count": "Filas",
+                    "size_kb": "Tamaño (KB)"
+                }
+            )
+            
+            # Gráfico de distribución
+            if len(stats_df) <= 20:
+                st.subheader("📈 Distribución de Filas por Tabla")
+                chart_data = stats_df.set_index('TABLE_NAME')['row_count']
+                st.bar_chart(chart_data)
+        else:
+            st.warning("⚠️ No se encontraron tablas para auditar.")
+    else:
+        st.warning("⚠️ No hay tablas disponibles en la base de datos.")
+    
+    st.divider()
+    
+    # Sección de auditoría de cambios (tabla auditoria_cambios)
     if tabla_ok:
         resumen = pd.read_sql(text("""
             SELECT 
@@ -80,7 +174,7 @@ try:
             FROM dbo.auditoria_cambios
         """), engine)
         
-        st.subheader("📊 Resumen de Operaciones")
+        st.subheader("📝 Registro de Cambios (auditoria_cambios)")
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Total Registros", f"{int(resumen.iloc[0]['total']):,}")
         m2.metric("➕ Inserciones", f"{int(resumen.iloc[0]['inserts'] or 0):,}")
@@ -92,7 +186,7 @@ try:
         # Filtro y tabla
         col_f1, col_f2 = st.columns([1, 3])
         with col_f1:
-            filtro = st.selectbox("Filtrar:", ["Todas", "I", "U", "D"])
+            filtro = st.selectbox("Filtrar por operación:", ["Todas", "I", "U", "D"])
         
         query = "SELECT TOP 50 * FROM dbo.auditoria_cambios"
         if filtro != "Todas":
