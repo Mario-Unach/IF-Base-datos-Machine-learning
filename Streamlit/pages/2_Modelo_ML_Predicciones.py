@@ -4,13 +4,13 @@ import numpy as np
 import joblib
 import plotly.express as px
 import plotly.graph_objects as go
-import pyodbc
 from plotly.subplots import make_subplots
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 import os
 import sys
+from pathlib import Path
 
 # Agregar la ruta raíz al path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -61,6 +61,7 @@ def load_rf_models():
 @st.cache_data
 def load_dataset():
     """Carga el dataset directamente desde SQL Server"""
+    import pyodbc
     try:
         conn_str = (
             "DRIVER={ODBC Driver 17 for SQL Server};"
@@ -110,31 +111,35 @@ model_choice = st.sidebar.selectbox(
 )
 
 # ==========================================
-# PREPARACIÓN DE DATOS (CORREGIDO)
+# PREPARACIÓN DE DATOS (CORREGIDO PARA AMBOS MODELOS)
 # ==========================================
+X_scaled = None  # Variable global para usar en tab3
+
 if model_choice == "K-Means (Clustering)":
     features_to_drop = ['ID', 'default payment next month', 'Cluster']
     X = df.drop(columns=features_to_drop, errors='ignore')
+    
+    # 🔥 CORRECCIÓN CRÍTICA: Renombrar columnas para que coincidan con el scaler
+    if hasattr(kmeans_scaler, 'feature_names_in_'):
+        expected_names = kmeans_scaler.feature_names_in_
+        if len(X.columns) == len(expected_names):
+            X.columns = expected_names
+    
     X_scaled = kmeans_scaler.transform(X)
     df['Cluster'] = kmeans_model.predict(X_scaled)
 
 elif model_choice == "Random Forest (Clasificación)":
     X = df.drop(columns=['ID'], errors='ignore')
     
-    # 🔥 CORRECCIÓN CRÍTICA: Forzar que las columnas tengan los nombres con los que se entrenó el modelo
-    expected_names = None
+    # 🔥 CORRECCIÓN CRÍTICA: Renombrar columnas para que coincidan con el scaler
     if hasattr(rf_scaler, 'feature_names_in_'):
         expected_names = rf_scaler.feature_names_in_
-    elif hasattr(rf_model, 'feature_names_in_'):
-        expected_names = rf_model.feature_names_in_
-        
-    if expected_names is not None:
         if len(X.columns) == len(expected_names):
             X.columns = expected_names
         else:
             st.error(f"❌ Error de dimensiones: El modelo espera {len(expected_names)} características, pero se recibieron {len(X.columns)}.")
             st.stop()
-            
+    
     X_scaled = rf_scaler.transform(X)
 
 # ==========================================
@@ -158,7 +163,7 @@ with tab1:
         key_vars = ['LIMIT_BAL', 'AGE', 'PAY_0', 'BILL_AMT1', 'PAY_AMT1', 'default payment next month']
         cluster_profile = df.groupby('Cluster')[key_vars].mean()
         cluster_profile['Tasa_Default_%'] = df.groupby('Cluster')['default payment next month'].mean() * 100
-        st.dataframe(cluster_profile.round(2), width="stretch")
+        st.dataframe(cluster_profile.round(2), use_container_width=True)
         
         fig = px.bar(
             cluster_profile.reset_index(),
@@ -166,7 +171,7 @@ with tab1:
             title='Tasa de Impago por Cluster',
             color='Cluster', color_continuous_scale='Viridis'
         )
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
     else:
         st.header("📊 Análisis de Random Forest")
         y_true = df['default payment next month']
@@ -184,26 +189,26 @@ with tab1:
         fig_cm = px.imshow(cm, text_auto=True, aspect="auto", title="Matriz de Confusión",
                            labels=dict(x="Predicho", y="Real", color="Cantidad"),
                            x=["No Default", "Default"], y=["No Default", "Default"], color_continuous_scale='Blues')
-        st.plotly_chart(fig_cm, width="stretch")
+        st.plotly_chart(fig_cm, use_container_width=True)
 
 with tab2:
     st.header("🔮 Predicción Individual")
-    st.info("💡 Ingresa solo las **6 variables más importantes**. El sistema completará automáticamente el resto con los promedios del dataset para realizar la predicción.")
+    st.info("💡 Ingresa solo las 6 variables más importantes. El sistema completará automáticamente el resto con los promedios del dataset para realizar la predicción.")
     
     c1, c2, c3 = st.columns(3)
     with c1:
         limit_bal = st.number_input("💰 Límite de Crédito", 10000, 1000000, 150000, step=10000)
-        age = st.slider(" Edad", 18, 80, 30)
+        age = st.slider("📅 Edad", 18, 80, 30)
     with c2:
         pay_0 = st.slider("📊 Estado Pago Mes Actual (-1=puntual, 0-9=retraso)", -2, 8, 0)
-        pay_2 = st.slider(" Estado Pago Mes 2", -2, 8, 0)
+        pay_2 = st.slider("📊 Estado Pago Mes 2", -2, 8, 0)
     with c3:
         bill_amt1 = st.number_input("💵 Factura Mes 1", 0, 1000000, 50000, step=1000)
         pay_amt1 = st.number_input("💳 Pago Realizado Mes 1", 0, 1000000, 5000, step=500)
     
     if st.button("🎯 Predecir", type="primary", use_container_width=True):
         # 1. Obtener las medias del dataset para rellenar las variables faltantes
-        cols_to_drop = ['ID', 'default payment next month', 'Cluster']
+        cols_to_drop = ['ID', 'default payment next month', 'Cluster', 'target']
         means = df.drop(columns=[c for c in cols_to_drop if c in df.columns]).mean()
         new_row = means.copy()
         
@@ -215,38 +220,30 @@ with tab2:
         new_row['BILL_AMT1'] = float(bill_amt1)
         new_row['PAY_AMT1'] = float(pay_amt1)
         
-        # 3. 🔥 CORRECCIÓN CRÍTICA: Mapear nombres reales a nombres del scaler
-        # El scaler fue entrenado con nombres genéricos (Unnamed: 0, X1, X2, ..., X23)
-        # Necesitamos crear un mapeo entre los nombres reales y esos nombres genéricos
-        if hasattr(rf_scaler, 'feature_names_in_'):
-            scaler_names = rf_scaler.feature_names_in_
-            real_names = new_row.index.tolist()
-            
-            # Crear mapeo: nombre_real -> nombre_scaler
-            # Asumimos que el orden de las columnas en el DataFrame es el mismo
-            # que el orden en el que se entrenó el scaler
-            name_mapping = {}
-            for i, real_name in enumerate(real_names):
-                if i < len(scaler_names):
-                    name_mapping[real_name] = scaler_names[i]
-            
-            # Renombrar el índice de new_row
-            new_row = new_row.rename(index=name_mapping)
-            
-            # Reordenar según el orden del scaler
-            new_row = new_row[scaler_names]
-        
-        # 4. Escalar y predecir
-        X_new = rf_scaler.transform(new_row.values.reshape(1, -1))
+        # Convertir a array de numpy para evitar errores de índices de Pandas
+        X_new_array = new_row.values.reshape(1, -1)
         
         if model_choice == "Random Forest (Clasificación)":
-            pred = rf_model.predict(X_new)[0]
-            proba = rf_model.predict_proba(X_new)[0]
+            # 🔥 CORRECCIÓN DEFINITIVA: Ajustar dimensiones al vuelo
+            expected_features = rf_scaler.n_features_in_
+            current_features = X_new_array.shape[1]
+            
+            if current_features < expected_features:
+                # El scaler espera más columnas (probablemente incluyó el target o un índice al entrenar)
+                padding = np.zeros((1, expected_features - current_features))
+                X_new_array = np.hstack([X_new_array, padding])
+            elif current_features > expected_features:
+                X_new_array = X_new_array[:, :expected_features]
+            
+            # Escalar y predecir
+            X_new_scaled = rf_scaler.transform(X_new_array)
+            pred = rf_model.predict(X_new_scaled)[0]
+            proba = rf_model.predict_proba(X_new_scaled)[0]
             
             if pred == 1:
                 st.error(f"⚠️ **ALTO RIESGO DE DEFAULT** · Probabilidad: **{proba[1]*100:.1f}%**")
             else:
-                st.success(f"✅ **BAJO RIESGO** · Probabilidad de default: **{proba[0]*100:.1f}%**")
+                st.success(f"✅ **BAJO RIESGO** · Probabilidad de default: **{proba[1]*100:.1f}%**")
             
             col_p1, col_p2 = st.columns([1, 2])
             with col_p1:
@@ -258,21 +255,18 @@ with tab2:
                 st.plotly_chart(fig_p, use_container_width=True)
                 
         elif model_choice == "K-Means (Clustering)":
-            # Para K-Means, hacer el mismo mapeo si es necesario
-            if hasattr(kmeans_scaler, 'feature_names_in_'):
-                scaler_names_km = kmeans_scaler.feature_names_in_
-                real_names_km = new_row.index.tolist()
-                name_mapping_km = {}
-                for i, real_name in enumerate(real_names_km):
-                    if i < len(scaler_names_km):
-                        name_mapping_km[real_name] = scaler_names_km[i]
-                new_row_km = new_row.rename(index=name_mapping_km)
-                new_row_km = new_row_km[scaler_names_km]
-                X_new_km = kmeans_scaler.transform(new_row_km.values.reshape(1, -1))
-            else:
-                X_new_km = kmeans_scaler.transform(new_row.values.reshape(1, -1))
+            # 🔥 Ajustar dimensiones para K-Means también por seguridad
+            expected_features = kmeans_scaler.n_features_in_
+            current_features = X_new_array.shape[1]
             
-            cluster_pred = kmeans_model.predict(X_new_km)[0]
+            if current_features < expected_features:
+                padding = np.zeros((1, expected_features - current_features))
+                X_new_array = np.hstack([X_new_array, padding])
+            elif current_features > expected_features:
+                X_new_array = X_new_array[:, :expected_features]
+                
+            X_new_scaled = kmeans_scaler.transform(X_new_array)
+            cluster_pred = kmeans_model.predict(X_new_scaled)[0]
             st.success(f"✅ El cliente pertenece al **Cluster {cluster_pred}**")
             
             cluster_info = df[df['Cluster'] == cluster_pred]
@@ -292,11 +286,21 @@ with tab3:
     if model_choice == "K-Means (Clustering)":
         st.subheader("Distribución de Clientes en 2D (PCA)")
         
+        # Verificar que X_scaled existe y tiene datos
+        if X_scaled is None or len(X_scaled) == 0:
+            st.error("❌ No hay datos escalados para visualizar. Revisa la preparación de datos.")
+            st.stop()
+        
+        # Verificar que la columna Cluster existe
+        if 'Cluster' not in df.columns:
+            st.error("❌ La columna 'Cluster' no existe en el DataFrame.")
+            st.stop()
+        
         # Aplicar PCA
         pca = PCA(n_components=2)
         X_pca = pca.fit_transform(X_scaled)
         
-        # Crear DataFrame para graficar - ASEGURAR TIPOS CORRECTOS
+        # Crear DataFrame para graficar
         pca_df = pd.DataFrame({
             'PCA1': X_pca[:, 0].astype(float),
             'PCA2': X_pca[:, 1].astype(float),
@@ -306,10 +310,10 @@ with tab3:
         
         # Verificar que hay datos válidos
         if pca_df.isna().any().any():
-            st.warning("⚠️ Hay valores NaN en los datos")
+            st.warning("⚠️ Hay valores NaN en los datos, se eliminarán")
             pca_df = pca_df.dropna()
         
-        # Crear gráfico con configuración explícita
+        # Crear gráfico
         fig = px.scatter(
             pca_df,
             x='PCA1',
@@ -322,7 +326,6 @@ with tab3:
             color_discrete_sequence=px.colors.qualitative.Set1
         )
         
-        # Configurar el layout explícitamente
         fig.update_layout(
             xaxis_title="Componente Principal 1",
             yaxis_title="Componente Principal 2",
@@ -330,7 +333,6 @@ with tab3:
             showlegend=True
         )
         
-        # MOSTRAR EL GRÁFICO
         st.plotly_chart(fig, use_container_width=True, key="pca_kmeans")
         
         st.info("""
