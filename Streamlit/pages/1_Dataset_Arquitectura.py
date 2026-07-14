@@ -3,13 +3,15 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import sys
+import importlib
 from pathlib import Path
 from sqlalchemy import create_engine, text
-from streamlit_mermaid import st_mermaid
 
 # Agregar el directorio Streamlit al path para importar db_connections
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from db_connections import get_sql_connection
+import auth as auth_module
+auth_module = importlib.reload(auth_module)
 
 # Configuración de página específica para esta page
 st.set_page_config(
@@ -76,12 +78,47 @@ st.markdown("""
 
 st.markdown('<p class="page-header">📊 Dataset & Arquitectura de Datos</p>', unsafe_allow_html=True)
 
+auth_module.require_login()
+
+with st.sidebar:
+    st.markdown("### 🔐 Sesión")
+    st.caption(f"Usuario: {st.session_state.login_user}")
+    st.caption(f"Perfil: {st.session_state.login_profile}")
+    auth_module.logout_button()
+
+
+def objetos_faltantes(engine, nombres_objetos):
+    """Valida que tablas o vistas existan antes de ejecutar consultas."""
+    faltantes = []
+    query_existe = text("""
+        SELECT CASE
+            WHEN EXISTS (
+                SELECT 1
+                FROM INFORMATION_SCHEMA.TABLES
+                WHERE TABLE_NAME = :nombre
+            ) OR EXISTS (
+                SELECT 1
+                FROM INFORMATION_SCHEMA.VIEWS
+                WHERE TABLE_NAME = :nombre
+            )
+            THEN 1 ELSE 0
+        END AS existe
+    """)
+
+    for nombre in nombres_objetos:
+        existe = pd.read_sql(query_existe, engine, params={"nombre": nombre}).iloc[0]["existe"]
+        if int(existe) == 0:
+            faltantes.append(nombre)
+
+    return faltantes
+
 # Pestañas para organizar la información
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "🗄️ Explorador de Datos",
     "🏗️ Modelo Entidad-Relación",
     "📈 Visualizaciones Avanzadas",
-    "🔍 Consultas SQL"
+    "🔍 Consultas SQL",
+    "📦 Migración por Partes"
 ])
 
 with tab1:
@@ -114,87 +151,42 @@ with tab1:
     try:
         conn = get_sql_connection()
         engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
-        query = text(f"SELECT TOP {top_n} * FROM {tabla_seleccionada}")
-        df = pd.read_sql(query, engine)
-        
-        st.success(f"✅ {len(df)} registros cargados exitosamente")
-        
-        # Mostrar datos con formato
-        st.dataframe(
-            df.style.format(precision=2).background_gradient(cmap="Blues", subset=df.select_dtypes(include=['float', 'int']).columns),
-            use_container_width=True,
-            height=400
-        )
-        
-        # Estadísticas descriptivas en expander
-        with st.expander("📊 Ver Estadísticas Descriptivas"):
-            if not df.empty:
-                st.write(df.describe())
-        
-        conn.close()
+        faltantes = objetos_faltantes(engine, [tabla_seleccionada])
+        if faltantes:
+            st.error(f"❌ No existe la tabla/vista seleccionada en la base activa: {faltantes[0]}")
+            conn.close()
+        else:
+            query = text(f"SELECT TOP {top_n} * FROM {tabla_seleccionada}")
+            df = pd.read_sql(query, engine)
+            
+            st.success(f"✅ {len(df)} registros cargados exitosamente")
+            
+            # Mostrar datos con formato
+            st.dataframe(
+                df.style.format(precision=2).background_gradient(cmap="Blues", subset=df.select_dtypes(include=['float', 'int']).columns),
+                use_container_width=True,
+                height=400
+            )
+            
+            # Estadísticas descriptivas en expander
+            with st.expander("📊 Ver Estadísticas Descriptivas"):
+                if not df.empty:
+                    st.write(df.describe())
+            
+            conn.close()
         
     except Exception as e:
         st.error(f"❌ Error al cargar datos: {str(e)}")
 
 with tab2:
     st.markdown("### 🏗️ Modelo Entidad-Relación Normalizado")
-    
-    # Diagrama ER - Sin los backticks de markdown
-    er_diagram = """
-    erDiagram
-        dim_estado_civil {
-            int id_estado_civil PK
-            varchar descripcion_estado_civil
-        }
-        dim_sexo {
-            int id_sexo PK
-            varchar descripcion_sexo
-        }
-        dim_educacion {
-            int id_educacion PK
-            varchar nivel_educativo
-        }
-        dim_cliente {
-            int id_cliente PK
-            int id_sexo FK
-            int id_educacion FK
-            int id_estado_civil FK
-            int edad
-            float limite_credito
-        }
-        riesgo_crediticio {
-            int id_cliente FK
-            int incumplimiento_proximo_mes
-        }
-        dim_estatus_pago {
-            int id_estatus PK
-            varchar descripcion_estatus
-        }
-        dim_tiempo_mes {
-            int id_mes PK
-            varchar mes_referencia
-            int orden_historial
-        }
-        historial_pagos {
-            int id_historial PK
-            int id_cliente FK
-            int id_mes FK
-            int id_estatus_pago FK
-            float monto_estado_cuenta
-            float monto_pago_anterior
-        }
-        dim_estado_civil ||--o{ dim_cliente : "tiene"
-        dim_sexo ||--o{ dim_cliente : "tiene"
-        dim_educacion ||--o{ dim_cliente : "tiene"
-        dim_cliente ||--o| riesgo_crediticio : "posee"
-        dim_cliente ||--o{ historial_pagos : "realiza"
-        dim_estatus_pago ||--o{ historial_pagos : "clasifica"
-        dim_tiempo_mes ||--o{ historial_pagos : "registra"
-    """
-    
-    # Usar st_mermaid en lugar de st.markdown
-    with st.container(border=True):
-        st_mermaid(er_diagram)
+    er_image = Path(__file__).resolve().parents[2] / "Anexos" / "Entidad - Relacion.jpeg"
+
+    if er_image.exists():
+        with st.container(border=True):
+            st.image(str(er_image), use_container_width=True, caption="Modelo Entidad-Relación")
+    else:
+        st.error(f"❌ No se encontró la imagen del modelo ER en: {er_image}")
 
 with tab3:
     st.markdown("### 📈 Visualizaciones Avanzadas del Dataset")
@@ -303,8 +295,8 @@ with tab4:
             SELECT 
                 e.nivel_educativo,
                 COUNT(*) as total_clientes,
-                SUM(r.incumplimiento_proximo_mes) as impagos,
-                SUM(r.incumplimiento_proximo_mes) * 100.0 / COUNT(*) as porcentaje_impago
+                SUM(CAST(r.incumplimiento_proximo_mes AS INT)) as impagos,
+                SUM(CAST(r.incumplimiento_proximo_mes AS FLOAT)) * 100.0 / NULLIF(COUNT(*), 0) as porcentaje_impago
             FROM dim_cliente c
             INNER JOIN dim_educacion e ON c.id_educacion = e.id_educacion
             INNER JOIN riesgo_crediticio r ON c.id_cliente = r.id_cliente
@@ -318,10 +310,16 @@ with tab4:
                 operacion,
                 COUNT(*) as cantidad,
                 MAX(fecha_cambio) as ultimo_cambio
-            FROM auditoria_cambios
+            FROM dbo.auditoria_cambios
             GROUP BY tabla_afectada, operacion
             ORDER BY cantidad DESC
         """
+    }
+
+    objetos_requeridos = {
+        "Top 10 clientes con mayor límite de crédito": ["dim_cliente", "dim_sexo", "dim_educacion", "riesgo_crediticio"],
+        "Distribución de impagos por nivel educativo": ["dim_cliente", "dim_educacion", "riesgo_crediticio"],
+        "Estadísticas de auditoría": ["auditoria_cambios"]
     }
     
     consulta_seleccionada = st.selectbox("Selecciona una consulta:", list(consultas.keys()))
@@ -330,18 +328,23 @@ with tab4:
         try:
             conn = get_sql_connection()
             engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
-            query = text(consultas[consulta_seleccionada])
-            
-            # Mostrar la consulta SQL en expander
-            with st.expander("📜 Ver SQL"):
-                st.code(query.string, language='sql')
-            
-            df_result = pd.read_sql(query, engine)
-            
-            st.success(f"✅ Consulta ejecutada: {len(df_result)} registros")
-            st.dataframe(df_result, use_container_width=True)
-            
-            conn.close()
+            faltantes = objetos_faltantes(engine, objetos_requeridos.get(consulta_seleccionada, []))
+            if faltantes:
+                st.error("❌ Faltan objetos requeridos para esta consulta: " + ", ".join(faltantes))
+                conn.close()
+            else:
+                query = text(consultas[consulta_seleccionada])
+                
+                # Mostrar la consulta SQL en expander
+                with st.expander("📜 Ver SQL"):
+                    st.code(consultas[consulta_seleccionada], language='sql')
+                
+                df_result = pd.read_sql(query, engine)
+                
+                st.success(f"✅ Consulta ejecutada: {len(df_result)} registros")
+                st.dataframe(df_result, use_container_width=True)
+                
+                conn.close()
             
         except Exception as e:
             st.error(f"❌ Error al ejecutar consulta: {str(e)}")
@@ -374,3 +377,77 @@ with tab4:
         with col_btn2:
             if st.button("🧹 Limpiar"):
                 st.session_state.sql_custom = ""
+
+with tab5:
+    st.markdown("### 📦 Migración Didáctica por Partes")
+    st.info("Usa este panel para consultar, previsualizar, migrar y eliminar lotes desde staging_credit_cards.")
+
+    lote_col1, lote_col2 = st.columns([1, 1])
+    with lote_col1:
+        cantidad_lote = st.number_input("Cantidad de registros por lote:", min_value=1, value=10, step=1)
+    with lote_col2:
+        id_cliente_eliminar = st.number_input("ID cliente para eliminar migrado:", min_value=1, value=1, step=1)
+
+    tipo_eliminar = st.selectbox(
+        "Tipo de eliminación:",
+        ["Eliminar del staging", "Eliminar cliente migrado"],
+        index=0,
+        key="tipo_eliminar_migracion"
+    )
+
+    try:
+        conn = get_sql_connection()
+        engine = create_engine("mssql+pyodbc://", creator=lambda: conn, echo=False)
+
+        acciones_col1, acciones_col2, acciones_col3, acciones_col4 = st.columns(4)
+
+        with acciones_col1:
+            if st.button("🔍 Consultar"):
+                resumen = pd.read_sql(text("SELECT * FROM dbo.vw_resumen_migracion"), engine)
+                st.subheader("Resumen de migración")
+                st.success("✅ Resumen consultado correctamente")
+                st.dataframe(resumen, use_container_width=True)
+
+        with acciones_col2:
+            if st.button("🆕 Nuevo"):
+                lote_preview = pd.read_sql(
+                    text("EXEC dbo.sp_ver_lote_staging @CantidadRegistros = :cantidad"),
+                    engine,
+                    params={"cantidad": int(cantidad_lote)}
+                )
+                st.subheader("Vista previa del lote")
+                st.dataframe(lote_preview, use_container_width=True)
+
+        with acciones_col3:
+            if st.button("💾 Guardar"):
+                resultado = pd.read_sql(
+                    text("EXEC dbo.sp_guardar_lote_credit_cards @CantidadRegistros = :cantidad"),
+                    engine,
+                    params={"cantidad": int(cantidad_lote)}
+                )
+                st.success("✅ Lote guardado y migrado correctamente")
+                st.dataframe(resultado, use_container_width=True)
+
+        with acciones_col4:
+            if st.button("🗑️ Eliminar"):
+                if tipo_eliminar == "Eliminar del staging":
+                    resultado_eliminar = pd.read_sql(
+                        text("EXEC dbo.sp_eliminar_lote_staging @CantidadRegistros = :cantidad"),
+                        engine,
+                        params={"cantidad": int(cantidad_lote)}
+                    )
+                    st.warning("⚠️ Registros eliminados desde staging")
+                    st.dataframe(resultado_eliminar, use_container_width=True)
+                else:
+                    resultado_eliminar = pd.read_sql(
+                        text("EXEC dbo.sp_eliminar_cliente_migrado @IdCliente = :id_cliente"),
+                        engine,
+                        params={"id_cliente": int(id_cliente_eliminar)}
+                    )
+                    st.warning("⚠️ Cliente migrado eliminado")
+                    st.dataframe(resultado_eliminar, use_container_width=True)
+
+        conn.close()
+
+    except Exception as e:
+        st.error(f"❌ Error en migración por partes: {str(e)}")
