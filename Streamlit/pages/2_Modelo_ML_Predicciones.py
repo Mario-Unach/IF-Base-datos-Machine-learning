@@ -12,6 +12,16 @@ import os
 import sys
 from pathlib import Path
 
+
+# 1. Agregar la carpeta raíz (Streamlit/) al path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# 2. Importar el módulo de autenticación
+import auth
+
+# 3. Inicializar y proteger la página
+auth.init_session_state()
+auth.require_role(["Administrador", "Analista"]) # Roles permitidos
 # Agregar la ruta raíz al path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -280,209 +290,424 @@ with tab2:
             </div>
             """, unsafe_allow_html=True)
 
+# ============================================================================
+# TAB 3: VISUALIZACIÓN Y ANÁLISIS AVANZADO
+# ============================================================================
 with tab3:
-    st.header("📈 Visualización")
+    st.header("📈 Visualización y Análisis de Resultados")
+    st.markdown(
+        "Esta sección presenta los resultados visuales del modelo seleccionado, "
+        "proporcionando insights clave para la interpretación y validación de los hallazgos."
+    )
     
     if model_choice == "K-Means (Clustering)":
-        st.subheader("Distribución de Clientes en 2D (PCA)")
+        st.markdown("---")
+        st.subheader("🔬 Análisis de Segmentación No Supervisada")
         
-        # Verificar que X_scaled existe y tiene datos
+        # Validación de datos
         if X_scaled is None or len(X_scaled) == 0:
-            st.error("❌ No hay datos escalados para visualizar. Revisa la preparación de datos.")
+            st.error("❌ No hay datos escalados disponibles para visualización.")
             st.stop()
         
-        # Verificar que la columna Cluster existe
         if 'Cluster' not in df.columns:
-            st.error("❌ La columna 'Cluster' no existe en el DataFrame.")
+            st.error("❌ La columna 'Cluster' no está definida en el dataset.")
             st.stop()
         
-        # Aplicar PCA
+        # Aplicar PCA con análisis de varianza explicada
         pca = PCA(n_components=2)
         X_pca = pca.fit_transform(X_scaled)
+        varianza_explicada = pca.explained_variance_ratio_ * 100
         
-        # Crear DataFrame para graficar
+        # Métricas del análisis PCA
+        col_m1, col_m2, col_m3 = st.columns(3)
+        with col_m1:
+            st.metric("📊 Varianza PC1", f"{varianza_explicada[0]:.2f}%")
+        with col_m2:
+            st.metric("📊 Varianza PC2", f"{varianza_explicada[1]:.2f}%")
+        with col_m3:
+            st.metric("📊 Varianza Total", f"{varianza_explicada.sum():.2f}%")
+        
+        st.markdown(
+            f"**Nota:** Los dos componentes principales capturan el **{varianza_explicada.sum():.2f}%** "
+            f"de la varianza total del dataset."
+        )
+        
+        # Crear DataFrame para visualización
         pca_df = pd.DataFrame({
-            'PCA1': X_pca[:, 0].astype(float),
-            'PCA2': X_pca[:, 1].astype(float),
+            'Componente Principal 1': X_pca[:, 0].astype(float),
+            'Componente Principal 2': X_pca[:, 1].astype(float),
             'Cluster': df['Cluster'].astype(str),
-            'Default': df['default payment next month'].astype(int).map({0: 'No', 1: 'Sí'})
+            'Estado de Default': df['default payment next month'].astype(int).map({0: 'No Default', 1: 'Default'})
         })
         
-        # Verificar que hay datos válidos
+        # Limpiar datos si es necesario
         if pca_df.isna().any().any():
-            st.warning("⚠️ Hay valores NaN en los datos, se eliminarán")
+            st.warning("⚠️ Se detectaron valores nulos en los datos. Procediendo con limpieza automática.")
             pca_df = pca_df.dropna()
         
-        # Crear gráfico
-        fig = px.scatter(
+        # Visualización principal: Scatter plot con PCA
+        st.markdown("#### 🎯 Distribución Espacial de Clusters (Reducción Dimensional PCA)")
+        fig_pca = px.scatter(
             pca_df,
-            x='PCA1',
-            y='PCA2',
+            x='Componente Principal 1',
+            y='Componente Principal 2',
             color='Cluster',
-            symbol='Default',
-            title='Distribución de Clientes por Cluster',
-            hover_data=['Cluster', 'Default'],
-            opacity=0.7,
-            color_discrete_sequence=px.colors.qualitative.Set1
+            symbol='Estado de Default',
+            title=f'Segmentación de Clientes en Espacio 2D (PCA: {varianza_explicada.sum():.1f}% varianza explicada)',
+            hover_data=['Cluster', 'Estado de Default'],
+            opacity=1,
+            color_discrete_sequence=px.colors.qualitative.Set2,
+            size_max=10,
+            template="plotly_dark"
         )
         
-        fig.update_layout(
-            xaxis_title="Componente Principal 1",
-            yaxis_title="Componente Principal 2",
-            height=600,
-            showlegend=True
+        fig_pca.update_layout(
+            xaxis_title=f"Componente Principal 1 ({varianza_explicada[0]:.1f}% varianza)",
+            yaxis_title=f"Componente Principal 2 ({varianza_explicada[1]:.1f}% varianza)",
+            height=650,
+            showlegend=True,
+            legend=dict(
+                orientation="v",
+                yanchor="top",
+                y=0.99,
+                xanchor="left",
+                x=1.02,
+                font=dict(color="white", size=16),
+                title_font=dict(size=18, color="white")
+            ),
+            plot_bgcolor='rgba(0,0,0,1)',   # <-- Fondo del gráfico negro sólido
+            paper_bgcolor='rgba(0,0,0,1)'   # <-- Fondo del lienzo exterior negro sólido
         )
         
-        st.plotly_chart(fig, use_container_width=True, key="pca_kmeans")
+        st.plotly_chart(fig_pca, use_container_width=True, key="pca_kmeans_v2")
         
+        st.markdown("---")
+        
+        # Análisis de centroides y características de clusters
+        st.markdown("#### 📊 Perfil Detallado de Clusters")
+        
+        cluster_stats = df.groupby('Cluster').agg({
+            'LIMIT_BAL': ['mean', 'median', 'std'],
+            'AGE': ['mean', 'median'],
+            'default payment next month': ['mean', 'count']
+        }).round(2)
+        
+        # Simplificar nombres de columnas
+        cluster_stats.columns = [
+            'Límite_Crédito_Media', 'Límite_Crédito_Mediana', 'Límite_Crédito_DesvEst',
+            'Edad_Media', 'Edad_Mediana',
+            'Tasa_Default', 'Tamaño_Cluster'
+        ]
+        
+        cluster_stats['Tasa_Default_%'] = (cluster_stats['Tasa_Default'] * 100).round(2)
+        cluster_stats = cluster_stats.reset_index()
+        
+        st.dataframe(
+            cluster_stats,
+            use_container_width=True,
+            hide_index=True
+        )
+        
+        # Visualización de tasa de default por cluster
+        st.markdown("#### ⚠️ Análisis de Riesgo por Segmento")
+        fig_risk = px.bar(
+            cluster_stats,
+            x='Cluster',
+            y='Tasa_Default_%',
+            title='Tasa de Incumplimiento por Cluster',
+            labels={'Tasa_Default_%': 'Tasa de Default (%)', 'Cluster': 'Segmento'},
+            color='Tasa_Default_%',
+            color_continuous_scale='RdYlGn_r',
+            text='Tasa_Default_%'
+        )
+        
+        fig_risk.update_layout(
+            height=450,
+            xaxis_title="Segmento de Clientes",
+            yaxis_title="Porcentaje de Incumplimiento",
+            showlegend=False
+        )
+        
+        fig_risk.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+        
+        st.plotly_chart(fig_risk, use_container_width=True)
+        
+        # Interpretación académica
+        st.markdown("#### 📖 Interpretación de Resultados")
         st.info("""
-        **Interpretación:**
-        - Los puntos de colores representan los clientes agrupados por cluster
-        - Los símbolos indican si el cliente hizo default o no
-        - Los clusters agrupan clientes con comportamientos similares
+        **Análisis de Segmentación K-Means:**
+        
+        1. **Reducción Dimensional (PCA):** El análisis de componentes principales permite visualizar 
+           la estructura de clusters en un espacio 2D, capturando la variabilidad más significativa 
+           del dataset.
+        
+        2. **Separabilidad de Clusters:** La distribución espacial muestra el grado de separación 
+           entre segmentos, indicando la efectividad del algoritmo de clustering.
+        
+        3. **Correlación con Default:** La superposición del estado de default sobre los clusters 
+           revela patrones de riesgo crediticio asociados a cada segmento.
+        
+        4. **Perfil de Riesgo:** Los clusters con mayor tasa de default pueden considerarse segmentos 
+           de alto riesgo, mientras que aquellos con menor tasa representan clientes de bajo riesgo.
+        
+        **Recomendación:** Utilizar esta segmentación para diseñar estrategias diferenciadas de 
+        gestión de riesgo y ofertas comerciales personalizadas.
         """)
     
     else:  # Random Forest
-        st.subheader("Análisis Visual del Modelo Random Forest")
+        st.markdown("---")
+        st.subheader("🎯 Análisis del Modelo de Clasificación Supervisada")
         
-        # Verificar que X_scaled existe
+        # Validación de datos
         if X_scaled is None or len(X_scaled) == 0:
-            st.error("❌ No hay datos escalados para visualizar.")
+            st.error("❌ No hay datos escalados disponibles para análisis.")
             st.stop()
         
-        # 1. Importancia de Características
-        col1, col2 = st.columns([2, 1])
+        # Generar predicciones
+        y_true = df['default payment next month']
+        y_pred = rf_model.predict(X_scaled)
+        y_proba = rf_model.predict_proba(X_scaled)[:, 1]
         
-        with col1:
-            st.markdown("#### 🎯 Top 15 Variables Más Importantes")
-            feature_importance = pd.DataFrame({
-                'Feature': X.columns,
-                'Importancia': rf_model.feature_importances_
-            }).sort_values('Importancia', ascending=False).head(15)
-            
+        # ========================================================================
+        # SECCIÓN 1: MÉTRICAS DE RENDIMIENTO
+        # ========================================================================
+        st.markdown("#### 📊 Métricas de Evaluación del Modelo")
+        
+        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+        
+        with col_m1:
+            accuracy = accuracy_score(y_true, y_pred)
+            st.metric("🎯 Accuracy", f"{accuracy:.4f}", 
+                     help="Proporción de predicciones correctas sobre el total")
+        
+        with col_m2:
+            precision = precision_score(y_true, y_pred)
+            st.metric("📈 Precision", f"{precision:.4f}",
+                     help="De los predichos como default, cuántos realmente lo fueron")
+        
+        with col_m3:
+            recall = recall_score(y_true, y_pred)
+            st.metric("🔍 Recall", f"{recall:.4f}",
+                     help="De los defaults reales, cuántos fueron detectados")
+        
+        with col_m4:
+            f1 = f1_score(y_true, y_pred)
+            st.metric("⚖️ F1-Score", f"{f1:.4f}",
+                     help="Media armónica entre Precision y Recall")
+        
+        st.markdown("---")
+        
+        # ========================================================================
+        # SECCIÓN 2: ANÁLISIS DE IMPORTANCIA DE VARIABLES
+        # ========================================================================
+        st.markdown("#### 🔬 Importancia de Variables Predictoras")
+        st.markdown(
+            "El análisis de importancia de características revela qué variables tienen mayor "
+            "influencia en la decisión del modelo Random Forest."
+        )
+        
+        # Calcular importancia de características
+        feature_importance_df = pd.DataFrame({
+            'Variable': X.columns,
+            'Importancia': rf_model.feature_importances_
+        }).sort_values('Importancia', ascending=False)
+        
+        # Top 15 variables
+        top_features = feature_importance_df.head(15)
+        
+        col_imp1, col_imp2 = st.columns([3, 2])
+        
+        with col_imp1:
             fig_imp = px.bar(
-                feature_importance,
+                top_features,
                 x='Importancia',
-                y='Feature',
+                y='Variable',
                 orientation='h',
-                title='Importancia de Variables en la Predicción',
+                title='Top 15 Variables con Mayor Poder Predictivo',
                 color='Importancia',
-                color_continuous_scale='Viridis'
+                color_continuous_scale='Viridis',
+                labels={'Importancia': 'Importancia Relativa', 'Variable': 'Característica'}
             )
+            
             fig_imp.update_layout(
                 yaxis={'categoryorder': 'total ascending'},
-                height=500,
-                showlegend=False
+                height=550,
+                showlegend=False,
+                xaxis_title="Importancia Normalizada (Gini Impurity)",
+                yaxis_title=""
             )
+            
             st.plotly_chart(fig_imp, use_container_width=True)
         
-        with col2:
-            st.markdown("#### 📊 Métricas del Modelo")
-            y_pred = rf_model.predict(X_scaled)
-            y_true = df['default payment next month']
+        with col_imp2:
+            st.markdown("**📋 Ranking Completo:**")
+            st.dataframe(
+                feature_importance_df.head(10),
+                use_container_width=True,
+                hide_index=True
+            )
             
-            accuracy = accuracy_score(y_true, y_pred)
-            st.metric("🎯 Accuracy", f"{accuracy:.2%}")
-            st.metric("📈 Precision", f"{precision_score(y_true, y_pred):.2%}")
-            st.metric("🔍 Recall", f"{recall_score(y_true, y_pred):.2%}")
-            st.metric("⚖️ F1-Score", f"{f1_score(y_true, y_pred):.2%}")
+            # Estadísticas de importancia
+            st.markdown("**📈 Estadísticas:**")
+            st.metric("Variables totales", len(feature_importance_df))
+            st.metric("Importancia máxima", f"{feature_importance_df['Importancia'].max():.4f}")
+            st.metric("Importancia media", f"{feature_importance_df['Importancia'].mean():.4f}")
         
-        st.divider()
+        st.markdown("---")
         
-        # 2. Matriz de Confusión y Distribución
-        col3, col4 = st.columns(2)
+        # ========================================================================
+        # SECCIÓN 3: MATRIZ DE CONFUSIÓN Y ANÁLISIS DE ERRORES
+        # ========================================================================
+        st.markdown("#### 🔢 Matriz de Confusión y Análisis de Clasificación")
         
-        with col3:
-            st.markdown("#### 🔢 Matriz de Confusión")
+        col_cm1, col_cm2 = st.columns(2)
+        
+        with col_cm1:
+            st.markdown("**Predicciones vs Valores Reales**")
+            
             cm = confusion_matrix(y_true, y_pred)
+            
             fig_cm = px.imshow(
                 cm,
                 text_auto=True,
                 aspect="auto",
-                title='Predicciones vs Valores Reales',
-                labels=dict(x="Predicho", y="Real", color="Cantidad"),
+                title='Matriz de Confusión',
+                labels=dict(x="Clase Predicha", y="Clase Real", color="Frecuencia"),
                 x=["No Default (0)", "Default (1)"],
                 y=["No Default (0)", "Default (1)"],
                 color_continuous_scale='Blues'
             )
-            fig_cm.update_layout(height=400)
+            
+            fig_cm.update_layout(
+                height=450,
+                xaxis_title="Predicción del Modelo",
+                yaxis_title="Valor Real"
+            )
+            
             st.plotly_chart(fig_cm, use_container_width=True)
         
-        with col4:
-            st.markdown("#### 📈 Distribución de Predicciones")
-            pred_df = pd.DataFrame({
-                'Tipo': ['Real', 'Predicho'],
-                'No Default': [
-                    (y_true == 0).sum(),
-                    (y_pred == 0).sum()
-                ],
-                'Default': [
-                    (y_true == 1).sum(),
-                    (y_pred == 1).sum()
-                ]
-            })
+        with col_cm2:
+            st.markdown("**📊 Desglose de Clasificaciones:**")
             
-            fig_dist = px.bar(
-                pred_df,
-                x='Tipo',
-                y=['No Default', 'Default'],
-                barmode='group',
-                title='Comparación: Real vs Predicho',
-                color_discrete_sequence=['#00d4ff', '#EF553B']
-            )
-            fig_dist.update_layout(
-                height=400,
-                xaxis_title="",
-                yaxis_title="Cantidad de Clientes"
-            )
-            st.plotly_chart(fig_dist, use_container_width=True)
+            # Calcular métricas de la matriz de confusión
+            tn, fp, fn, tp = cm.ravel()
+            
+            st.metric("✅ Verdaderos Negativos (TN)", f"{tn:,}",
+                     help="Clientes sin default correctamente identificados")
+            st.metric("❌ Falsos Positivos (FP)", f"{fp:,}",
+                     help="Clientes sin default clasificados incorrectamente como default")
+            st.metric("❌ Falsos Negativos (FN)", f"{fn:,}",
+                     help="Clientes con default no detectados por el modelo")
+            st.metric("✅ Verdaderos Positivos (TP)", f"{tp:,}",
+                     help="Clientes con default correctamente identificados")
         
-        st.divider()
+        st.markdown("---")
         
-        # 3. Análisis de Probabilidades
+        # ========================================================================
+        # SECCIÓN 4: ANÁLISIS DE DISTRIBUCIÓN DE PROBABILIDADES
+        # ========================================================================
         st.markdown("#### 🎲 Distribución de Probabilidades de Default")
-        y_proba = rf_model.predict_proba(X_scaled)[:, 1]
+        st.markdown(
+            "El histograma muestra cómo el modelo asigna probabilidades a cada instancia, "
+            "permitiendo evaluar la confianza de las predicciones."
+        )
         
         proba_df = pd.DataFrame({
-            'Probabilidad': y_proba,
-            'Clase_Real': df['default payment next month'].map({0: 'No Default', 1: 'Default'})
+            'Probabilidad_Predicha': y_proba,
+            'Clase_Real': y_true.map({0: 'No Default', 1: 'Default'})
         })
         
         fig_proba = px.histogram(
             proba_df,
-            x='Probabilidad',
+            x='Probabilidad_Predicha',
             color='Clase_Real',
-            nbins=50,
-            title='Distribución de Probabilidades Predichas',
-            labels={'Probabilidad': 'Probabilidad de Default'},
-            color_discrete_map={'No Default': '#00d4ff', 'Default': '#EF553B'},
-            opacity=0.7
+            nbins=60,
+            title='Distribución de Probabilidades de Default por Clase Real',
+            labels={'Probabilidad_Predicha': 'Probabilidad de Default Predicha', 
+                   'count': 'Frecuencia'},
+            color_discrete_map={'No Default': '#3498db', 'Default': '#e74c3c'},
+            opacity=0.75,
+            marginal="box"
         )
+        
         fig_proba.update_layout(
-            height=400,
-            xaxis_title="Probabilidad de Default",
-            yaxis_title="Cantidad de Clientes",
-            barmode='overlay'
+            height=500,
+            xaxis_title="Probabilidad de Default (0 = Bajo Riesgo, 1 = Alto Riesgo)",
+            yaxis_title="Número de Clientes",
+            barmode='overlay',
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            )
         )
+        
         st.plotly_chart(fig_proba, use_container_width=True)
         
+        # Estadísticas de probabilidades
+        col_p1, col_p2, col_p3 = st.columns(3)
+        
+        with col_p1:
+            st.metric("📊 Probabilidad Media", f"{y_proba.mean():.4f}")
+        with col_p2:
+            st.metric("📊 Desviación Estándar", f"{y_proba.std():.4f}")
+        with col_p3:
+            st.metric("📊 Mediana", f"{np.median(y_proba):.4f}")
+        
+        st.markdown("---")
+        
+        # ========================================================================
+        # SECCIÓN 5: INTERPRETACIÓN ACADÉMICA
+        # ========================================================================
+        st.markdown("#### 📖 Interpretación y Validación del Modelo")
         st.info("""
-        **Interpretación:**
-        - **Importancia de Variables:** Muestra qué características tienen más peso en la decisión del modelo
-        - **Matriz de Confusión:** Compara las predicciones del modelo con los valores reales
-        - **Distribución de Predicciones:** Visualiza cuántos clientes se predijeron correctamente
-        - **Probabilidades:** Muestra cómo el modelo asigna probabilidades a cada cliente
+        **Análisis del Modelo Random Forest:**
+        
+        1. **Capacidad Predictiva:** Las métricas de evaluación (Accuracy, Precision, Recall, F1-Score) 
+           cuantifican el rendimiento del modelo en la tarea de clasificación binaria.
+        
+        2. **Importancia de Variables:** El análisis de importancia revela que las variables relacionadas 
+           con el historial de pagos (PAY_0, PAY_2) y el límite de crédito (LIMIT_BAL) son los predictores 
+           más influyentes, lo cual es consistente con la literatura sobre riesgo crediticio.
+        
+        3. **Matriz de Confusión:** Permite identificar patrones de error del modelo, particularmente 
+           los falsos negativos (clientes con default no detectados), que representan el mayor riesgo 
+           para la institución financiera.
+        
+        4. **Distribución de Probabilidades:** Un modelo bien calibrado debería mostrar probabilidades 
+           bajas para la clase "No Default" y altas para la clase "Default". La superposición indica 
+           casos ambiguos que requieren análisis adicional.
+        
+        **Limitaciones y Consideraciones:**
+        - El modelo fue entrenado con datos históricos y puede no generalizar a cambios estructurales 
+          en el comportamiento de los clientes.
+        - La interpretación causal requiere análisis adicional, ya que Random Forest identifica 
+          correlaciones, no necesariamente causalidad.
+        
+        **Recomendaciones:**
+        - Implementar el modelo como sistema de alerta temprana para identificar clientes en riesgo.
+        - Monitorear continuamente el rendimiento del modelo y reentrenar periódicamente.
+        - Combinar las predicciones del modelo con análisis cualitativo para decisiones finales.
         """)
 
+# Información del sistema en el sidebar
 st.sidebar.markdown("---")
-st.sidebar.markdown("### 📚 Información")
+st.sidebar.markdown("### 📚 Información del Sistema")
 st.sidebar.markdown("""
-**Modelos disponibles:**
-- K-Means: Clustering para segmentación
-- Random Forest: Clasificación para predicción
+**Modelos Implementados:**
+- **K-Means:** Algoritmo de clustering no supervisado para segmentación de clientes
+- **Random Forest:** Ensemble de árboles de decisión para clasificación supervisada
 
-**Dataset:**
-- 30,000 clientes
-- 23 características
-- Target: default payment next month
+**Características del Dataset:**
+- 📊 **30,000** registros de clientes
+- 🔢 **23** variables predictoras
+- 🎯 **Target:** default payment next month (binario)
+
+**Tecnologías:**
+- Scikit-learn (modelos ML)
+- Pandas (procesamiento de datos)
+- Plotly (visualización interactiva)
+- Streamlit (interfaz web)
 """)

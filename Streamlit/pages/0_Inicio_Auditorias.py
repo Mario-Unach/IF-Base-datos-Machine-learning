@@ -13,7 +13,7 @@ import auth
 
 # 3. Inicializar y proteger la página
 auth.init_session_state()
-auth.require_role(["Administrador", "Analista"]) # Roles permitidos
+auth.require_role(["Administrador"]) # Roles permitidos
 
 st.set_page_config(page_title="Auditorías", page_icon="🔎", layout="wide")
 
