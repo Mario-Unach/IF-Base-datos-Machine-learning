@@ -69,6 +69,42 @@ try:
     
     st.divider()
     
+     # Sección de auditoría de cambios (tabla auditoria_cambios)
+    if tabla_ok:
+        resumen = pd.read_sql(text("""
+            SELECT 
+                COUNT(*) AS total,
+                SUM(CASE WHEN operacion = 'I' THEN 1 ELSE 0 END) AS inserts,
+                SUM(CASE WHEN operacion = 'U' THEN 1 ELSE 0 END) AS updates,
+                SUM(CASE WHEN operacion = 'D' THEN 1 ELSE 0 END) AS deletes,
+                MAX(fecha_cambio) AS ultimo
+            FROM dbo.auditoria_cambios
+        """), engine)
+        
+        st.subheader("📝 Registro de Cambios (auditoria_cambios)")
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Total Registros", f"{int(resumen.iloc[0]['total']):,}")
+        m2.metric("➕ Inserciones", f"{int(resumen.iloc[0]['inserts'] or 0):,}")
+        m3.metric("✏️ Actualizaciones", f"{int(resumen.iloc[0]['updates'] or 0):,}")
+        m4.metric("🗑️ Eliminaciones", f"{int(resumen.iloc[0]['deletes'] or 0):,}")
+        
+        st.divider()
+        # Filtro y tabla
+        col_f1, col_f2 = st.columns([1, 3])
+        with col_f1:
+            filtro = st.selectbox("Filtrar por operación:", ["Todas", "I", "U", "D"])
+        
+        query = "SELECT TOP 50 * FROM dbo.auditoria_cambios"
+        if filtro != "Todas":
+            query += f" WHERE operacion = '{filtro}'"
+        query += " ORDER BY fecha_cambio DESC"
+        
+        df_audit = pd.read_sql(text(query), engine)
+        with col_f2:
+            st.dataframe(df_audit, use_container_width=True, height=400)
+     
+        st.divider()
+    
     # Obtener todas las tablas de la base de datos
     st.subheader("📁 Tablas de la Base de Datos")
     tablas_query = text("""
@@ -162,45 +198,6 @@ try:
     
     st.divider()
     
-    # Sección de auditoría de cambios (tabla auditoria_cambios)
-    if tabla_ok:
-        resumen = pd.read_sql(text("""
-            SELECT 
-                COUNT(*) AS total,
-                SUM(CASE WHEN operacion = 'I' THEN 1 ELSE 0 END) AS inserts,
-                SUM(CASE WHEN operacion = 'U' THEN 1 ELSE 0 END) AS updates,
-                SUM(CASE WHEN operacion = 'D' THEN 1 ELSE 0 END) AS deletes,
-                MAX(fecha_cambio) AS ultimo
-            FROM dbo.auditoria_cambios
-        """), engine)
-        
-        st.subheader("📝 Registro de Cambios (auditoria_cambios)")
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Total Registros", f"{int(resumen.iloc[0]['total']):,}")
-        m2.metric("➕ Inserciones", f"{int(resumen.iloc[0]['inserts'] or 0):,}")
-        m3.metric("✏️ Actualizaciones", f"{int(resumen.iloc[0]['updates'] or 0):,}")
-        m4.metric("🗑️ Eliminaciones", f"{int(resumen.iloc[0]['deletes'] or 0):,}")
-        
-        st.divider()
-        
-        # Filtro y tabla
-        col_f1, col_f2 = st.columns([1, 3])
-        with col_f1:
-            filtro = st.selectbox("Filtrar por operación:", ["Todas", "I", "U", "D"])
-        
-        query = "SELECT TOP 50 * FROM dbo.auditoria_cambios"
-        if filtro != "Todas":
-            query += f" WHERE operacion = '{filtro}'"
-        query += " ORDER BY fecha_cambio DESC"
-        
-        df_audit = pd.read_sql(text(query), engine)
-        with col_f2:
-            st.dataframe(df_audit, use_container_width=True, height=400)
-        
-        if not df_audit.empty:
-            st.bar_chart(df_audit['operacion'].value_counts())
-    else:
-        st.warning("⚠️ La tabla de auditoría aún no existe en la base de datos.")
     
     conn.close()
 except Exception as e:
