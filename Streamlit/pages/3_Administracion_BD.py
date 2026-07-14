@@ -629,31 +629,56 @@ try:
         st.divider()
         
         st.markdown("### 🍃 Estado de MongoDB")
-        
         try:
             mongo_client = get_mongo_connection()
-            server_info = mongo_client.server_info()
-            
-            col_mongo1, col_mongo2 = st.columns(2)
-            
-            with col_mongo1:
-                st.success("✅ MongoDB Conectado")
-                st.info(f"**Versión:** {server_info.get('version', 'Desconocida')}")
-            
-            with col_mongo2:
-                db = mongo_client['ML_Experiments']
-                colecciones = db.list_collection_names()
+            if mongo_client:
+                server_info = mongo_client.server_info()
+                col_mongo1, col_mongo2 = st.columns(2)                   
+                with col_mongo1:
+                    st.success("✅ MongoDB Conectado")
+                    st.info(f"**Versión:** {server_info.get('version', 'Desconocida')}")
+                    
+                with col_mongo2:                        
+                    db = mongo_client['ML_Experiments']
+                    colecciones = db.list_collection_names()
+                    st.info(f"**Colecciones:** {len(colecciones)}")
+                    for col in colecciones:
+                        count = db[col].count_documents({})
+                        st.caption(f"• {col}: {count} documentos")
                 
-                st.info(f"**Colecciones:** {len(colecciones)}")
-                for col in colecciones:
-                    count = db[col].count_documents({})
-                    st.caption(f"• {col}: {count} documentos")
-            
-            mongo_client.close()
+                st.markdown("---")
+                st.markdown("#### 📊 Registro de Experimentos de Machine Learning")
+                if 'registro_experimentos' in colecciones:                       
+                    collection = db['registro_experimentos']
+                    # Obtener los últimos 10 experimentos ordenados por fecha descendente
+                    experimentos = list(collection.find().sort("fecha", -1).limit(10))
+                    if experimentos:                             # Convertir a lista de diccionarios para mostrar en DataFrame
+                        datos_exp = []
+                        for exp in experimentos:
+                            datos_exp.append({
+                                "Fecha": str(exp.get("fecha", "N/A"))[:19], # Recortar para formato limpio
+                                "Algoritmo": exp.get("algoritmo", "N/A"),
+                                "Clusters": exp.get("hiperparametros", {}).get("n_clusters", "N/A"),
+                                "Silhouette": exp.get("metricas", {}).get("silhouette_score", "N/A"),
+                                "Inercia": exp.get("metricas", {}).get("inertia", "N/A"),
+                                "Registros": exp.get("metricas", {}).get("total_registros_procesados", "N/A")
+                            })
+                        df_exp= pd.DataFrame(datos_exp)
+                        st.dataframe(df_exp, use_container_width=True, hide_index=True)
+                        # Expander para ver el documento JSON completo                           
+                        with st.expander("🔍 Ver detalles completos (JSON) de los experimentos"):
+                            for exp in experimentos:
+                                st.json(exp)
+                    else:
+                        st.info("ℹ️ No hay experimentos registrados aún en la colección 'registro_experimentos'.")
+                else:
+                    st.warning("⚠️ La colección 'registro_experimentos' no existe. Ejecuta el notebook `K-Means.ipynb` para generar y guardar los datos.")
+                mongo_client.close()                 
+            else:
+                st.error("❌ No se pudo establecer conexión con MongoDB.")
         except Exception as e:
-            st.error(f"❌ MongoDB: {str(e)}")
-    
-    # ==========================================
+            st.error(f"❌ Error al obtener información de MongoDB: {str(e)}")
+        # ==========================================
     # TAB 4: TERMINAL SQL
     # ==========================================
     with tab4:
