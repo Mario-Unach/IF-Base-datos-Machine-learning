@@ -38,8 +38,8 @@ with st.sidebar:
     st.divider()
     
 
-tab1, tab2, tab3, tab4 = st.tabs([
-    "🗄️ Explorador", "🏗️ Modelo ER", "📈 Análisis", "🔍 SQL"
+tab1, tab2, tab3 = st.tabs([
+    "🗄️ Explorador", "🏗️ Modelo ER", "📈 Análisis"
 ])
 
 try:
@@ -101,37 +101,7 @@ try:
                               font=dict(color='#e2e8f0'))
             st.plotly_chart(fig2, use_container_width=True)
     
-    with tab4:
-        consultas = {
-            "Top 10 mayor límite": """
-                SELECT TOP 10 c.id_cliente, e.nivel_educativo, c.edad, c.limite_credito, r.incumplimiento_proximo_mes
-                FROM dim_cliente c
-                INNER JOIN dim_educacion e ON c.id_educacion = e.id_educacion
-                INNER JOIN riesgo_crediticio r ON c.id_cliente = r.id_cliente
-                ORDER BY c.limite_credito DESC
-            """,
-            "Default por educación": """
-                SELECT e.nivel_educativo, COUNT(*) as total,
-                    SUM(CAST(r.incumplimiento_proximo_mes AS INT)) as defaults,
-                    SUM(CAST(r.incumplimiento_proximo_mes AS FLOAT)) * 100.0 / COUNT(*) as pct
-                FROM dim_cliente c
-                INNER JOIN dim_educacion e ON c.id_educacion = e.id_educacion
-                INNER JOIN riesgo_crediticio r ON c.id_cliente = r.id_cliente
-                GROUP BY e.nivel_educativo
-            """
-        }
-        
-        sel = st.selectbox("Consulta:", list(consultas.keys()))
-        if st.button("▶️ Ejecutar", type="primary"):
-            df_r = pd.read_sql(text(consultas[sel]), engine)
-            st.dataframe(df_r, use_container_width=True)
-        
-        with st.expander("⌨️ SQL Personalizado"):
-            sql = st.text_area("Query:", height=120, placeholder="SELECT TOP 100 * FROM vw_ml_dataset...")
-            if st.button("🚀 Ejecutar"):
-                if sql.strip():
-                    df_c = pd.read_sql(text(sql), engine)
-                    st.dataframe(df_c, use_container_width=True)
+    
     
     conn.close()
 except Exception as e:
