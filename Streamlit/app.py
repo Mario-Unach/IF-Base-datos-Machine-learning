@@ -50,23 +50,6 @@ with st.sidebar:
     st.caption(f"Usuario: `{st.session_state.login_user}`")
     st.divider()
     
-    # Menú de navegación con st.page_link
-    st.markdown("### 🧭 Navegación")
-    
-    rol_actual = st.session_state.login_profile
-    
-    # Solo mostrar enlaces a las páginas, NO a app.py
-    if rol_actual in ["SA", "Administrador"]:
-        st.page_link("pages/0_Inicio_Auditorias.py", label=" Inicio Auditorías")
-        st.page_link("pages/1_Dataset_Arquitectura.py", label="📊 Dataset & Arquitectura")
-        st.page_link("pages/2_Modelo_ML_Predicciones.py", label="🤖 Modelo ML & Predicciones")
-        st.page_link("pages/3_Administracion_BD.py", label="🛠️ Administración BD")
-    else:  # Analista
-        st.page_link("pages/0_Inicio_Auditorias.py", label="🔎 Inicio Auditorías")
-        st.page_link("pages/1_Dataset_Arquitectura.py", label="📊 Dataset & Arquitectura")
-        st.page_link("pages/2_Modelo_ML_Predicciones.py", label="🤖 Modelo ML & Predicciones")
-    
-    st.divider()
     auth_module.logout_button()
 
 # ==========================================
