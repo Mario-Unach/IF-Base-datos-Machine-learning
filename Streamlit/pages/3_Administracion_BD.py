@@ -110,16 +110,66 @@ try:
         m4.metric("📇 Índices", f"{int(metrics.iloc[0]['indices']):,}")
     
     with tab4:
-        st.subheader("⌨️ Terminal SQL")
-        st.warning("⚠️ Solo para administradores")
-        sql = st.text_area("SQL:", height=150, placeholder="SELECT TOP 10 * FROM dim_cliente")
-        if st.button("🚀 Ejecutar", type="primary"):
-            if sql.strip():
-                try:
-                    df_r = pd.read_sql(text(sql), engine)
-                    st.dataframe(df_r, use_container_width=True)
-                except Exception as e:
-                    st.error(f"❌ {str(e)}")
+        consultas = {
+            "Top 10 mayor límite": """
+                SELECT TOP 10 c.id_cliente, e.nivel_educativo, c.edad, c.limite_credito, r.incumplimiento_proximo_mes
+                FROM dim_cliente c
+                INNER JOIN dim_educacion e ON c.id_educacion = e.id_educacion
+                INNER JOIN riesgo_crediticio r ON c.id_cliente = r.id_cliente
+                ORDER BY c.limite_credito DESC
+            """,
+            "Default por educación": """
+                SELECT e.nivel_educativo, COUNT(*) as total,
+                    SUM(CAST(r.incumplimiento_proximo_mes AS INT)) as defaults,
+                    SUM(CAST(r.incumplimiento_proximo_mes AS FLOAT)) * 100.0 / COUNT(*) as pct
+                FROM dim_cliente c
+                INNER JOIN dim_educacion e ON c.id_educacion = e.id_educacion
+                INNER JOIN riesgo_crediticio r ON c.id_cliente = r.id_cliente
+                GROUP BY e.nivel_educativo
+            """
+        }
+        
+        sel = st.selectbox("Consulta:", list(consultas.keys()))
+        if st.button("▶️ Ejecutar", type="primary"):
+            df_r = pd.read_sql(text(consultas[sel]), engine)
+            st.dataframe(df_r, use_container_width=True)
+        
+        # Editor SQL personalizado
+        st.divider()
+        with st.expander("⌨️ SQL Personalizado", expanded=False):
+            sql_custom = st.text_area(
+                "Escribe tu consulta SQL:",
+                height=150,
+                placeholder="SELECT TOP 100 * FROM vw_ml_dataset...",
+                key="sql_editor_input"
+            )
+            col_btn1, col_btn2 = st.columns([3, 1])
+            with col_btn1:
+                if st.button("🚀 Ejecutar Consulta Personalizada", key="btn_ejecutar_sql"):
+                    if sql_custom and sql_custom.strip():
+                        try:
+                            sql_upper = sql_custom.strip().upper()
+                            
+                            # Detectar si es una consulta que retorna datos o modifica datos
+                            if sql_upper.startswith(('SELECT', 'WITH', 'EXEC', 'EXECUTE')):
+                                # Consultas que retornan datos
+                                df_custom = pd.read_sql(text(sql_custom), engine)
+                                st.success(f"✅ Consulta ejecutada: {len(df_custom)} registros")
+                                st.dataframe(df_custom, use_container_width=True)
+                            else:
+                                # Consultas que modifican datos (INSERT, UPDATE, DELETE)
+                                with engine.connect() as connection:
+                                    result = connection.execute(text(sql_custom))
+                                    connection.commit()
+                                    rows_affected = result.rowcount
+                                    st.success(f"✅ Operación ejecutada: {rows_affected} filas afectadas")
+                        except Exception as e:
+                            st.error(f"❌ Error: {str(e)}")
+                    else:
+                        st.warning("⚠️ Por favor escribe una consulta SQL")
+            with col_btn2:
+                if st.button("🧹 Limpiar", key="btn_limpiar_sql"):
+                    st.rerun()
     
     conn.close()
 except Exception as e:
