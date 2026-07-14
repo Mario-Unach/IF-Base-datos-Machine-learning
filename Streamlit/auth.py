@@ -5,7 +5,7 @@ AUTH_PROFILES = {
     "Administrador": {
         "username": "admin",
         "password": "ContraseñaSegura456!",
-        "role": "Administrador",  # ✅ Usar el mismo nombre que en AUTH_PROFILES
+        "role": "Administrador",
     },
     "Analista": {
         "username": "analista", 

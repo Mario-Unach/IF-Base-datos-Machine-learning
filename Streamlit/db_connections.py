@@ -44,9 +44,11 @@ def get_mongo_connection():
     if pymongo is None:
         st.error("❌ pymongo no está instalado en este entorno.")
         return None
-
     try:
-        client = pymongo.MongoClient("mongodb://localhost:27017/", serverSelectionTimeoutMS=3000)
+        client = pymongo.MongoClient(
+            "mongodb://admin:password123@localhost:27017/", 
+            serverSelectionTimeoutMS=3000
+        )
         client.admin.command('ping')
         return client
     except Exception as e:
