@@ -147,7 +147,7 @@ with tab1:
         default_rate_cluster = df.groupby('Cluster')['default payment next month'].mean() * 100
         cluster_profile['Tasa_Default_%'] = default_rate_cluster
         
-        st.dataframe(cluster_profile.round(2), use_container_width=True)
+        st.dataframe(cluster_profile.round(2), width="stretch")
         
         # Gráfico de tasa de default por cluster
         fig = px.bar(
@@ -158,7 +158,7 @@ with tab1:
             color='Cluster',
             color_continuous_scale='Viridis'
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
         
     else:  # Random Forest
         st.header("📊 Análisis de Random Forest")
@@ -196,7 +196,7 @@ with tab1:
             y=["No Default", "Default"],
             color_continuous_scale='Blues'
         )
-        st.plotly_chart(fig_cm, use_container_width=True)
+        st.plotly_chart(fig_cm, width="stretch")
         
         # Importancia de características
         st.subheader("Importancia de Características")
@@ -220,7 +220,7 @@ with tab1:
             color_continuous_scale='Viridis'
         )
         fig_imp.update_layout(yaxis={'categoryorder': 'total ascending'})
-        st.plotly_chart(fig_imp, use_container_width=True)
+        st.plotly_chart(fig_imp, width="stretch")
         
         # Distribución de predicciones
         st.subheader("Distribución de Predicciones")
@@ -238,7 +238,7 @@ with tab1:
                 color='Real',
                 color_discrete_map={0: '#636EFA', 1: '#EF553B'}
             )
-            st.plotly_chart(fig_real, use_container_width=True)
+            st.plotly_chart(fig_real, width="stretch")
         with col2:
             fig_pred = px.pie(
                 pred_df,
@@ -247,7 +247,7 @@ with tab1:
                 color='Predicho',
                 color_discrete_map={0: '#636EFA', 1: '#EF553B'}
             )
-            st.plotly_chart(fig_pred, use_container_width=True)
+            st.plotly_chart(fig_pred, width="stretch")
 
 with tab2:
     st.header("🔮 Predicción Individual")
@@ -336,7 +336,7 @@ with tab2:
                 color='Clase',
                 color_discrete_map={'No Default': '#636EFA', 'Default': '#EF553B'}
             )
-            st.plotly_chart(fig_proba, use_container_width=True)
+            st.plotly_chart(fig_proba, width="stretch")
 
 with tab3:
     st.header("📈 Visualización")
@@ -364,7 +364,7 @@ with tab3:
             title='Distribución de Clientes por Cluster',
             hover_data=['Cluster', 'Default']
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
         
         # Información adicional
         st.info("""
@@ -444,7 +444,7 @@ with tab3:
             )
 
             fig_dist.update_layout(height=600, showlegend=False, title_text="Distribución de las 5 Características Más Importantes")
-            st.plotly_chart(fig_dist, use_container_width=True)
+            st.plotly_chart(fig_dist, width="stretch")
             
             # Información adicional
             st.info("""
