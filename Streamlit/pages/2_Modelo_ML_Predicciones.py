@@ -341,6 +341,138 @@ with tab3:
         - Los símbolos indican si el cliente hizo default o no
         - Los clusters agrupan clientes con comportamientos similares
         """)
+    
+    else:  # Random Forest
+        st.subheader("Análisis Visual del Modelo Random Forest")
+        
+        # Verificar que X_scaled existe
+        if X_scaled is None or len(X_scaled) == 0:
+            st.error("❌ No hay datos escalados para visualizar.")
+            st.stop()
+        
+        # 1. Importancia de Características
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            st.markdown("#### 🎯 Top 15 Variables Más Importantes")
+            feature_importance = pd.DataFrame({
+                'Feature': X.columns,
+                'Importancia': rf_model.feature_importances_
+            }).sort_values('Importancia', ascending=False).head(15)
+            
+            fig_imp = px.bar(
+                feature_importance,
+                x='Importancia',
+                y='Feature',
+                orientation='h',
+                title='Importancia de Variables en la Predicción',
+                color='Importancia',
+                color_continuous_scale='Viridis'
+            )
+            fig_imp.update_layout(
+                yaxis={'categoryorder': 'total ascending'},
+                height=500,
+                showlegend=False
+            )
+            st.plotly_chart(fig_imp, use_container_width=True)
+        
+        with col2:
+            st.markdown("#### 📊 Métricas del Modelo")
+            y_pred = rf_model.predict(X_scaled)
+            y_true = df['default payment next month']
+            
+            accuracy = accuracy_score(y_true, y_pred)
+            st.metric("🎯 Accuracy", f"{accuracy:.2%}")
+            st.metric("📈 Precision", f"{precision_score(y_true, y_pred):.2%}")
+            st.metric("🔍 Recall", f"{recall_score(y_true, y_pred):.2%}")
+            st.metric("⚖️ F1-Score", f"{f1_score(y_true, y_pred):.2%}")
+        
+        st.divider()
+        
+        # 2. Matriz de Confusión y Distribución
+        col3, col4 = st.columns(2)
+        
+        with col3:
+            st.markdown("#### 🔢 Matriz de Confusión")
+            cm = confusion_matrix(y_true, y_pred)
+            fig_cm = px.imshow(
+                cm,
+                text_auto=True,
+                aspect="auto",
+                title='Predicciones vs Valores Reales',
+                labels=dict(x="Predicho", y="Real", color="Cantidad"),
+                x=["No Default (0)", "Default (1)"],
+                y=["No Default (0)", "Default (1)"],
+                color_continuous_scale='Blues'
+            )
+            fig_cm.update_layout(height=400)
+            st.plotly_chart(fig_cm, use_container_width=True)
+        
+        with col4:
+            st.markdown("#### 📈 Distribución de Predicciones")
+            pred_df = pd.DataFrame({
+                'Tipo': ['Real', 'Predicho'],
+                'No Default': [
+                    (y_true == 0).sum(),
+                    (y_pred == 0).sum()
+                ],
+                'Default': [
+                    (y_true == 1).sum(),
+                    (y_pred == 1).sum()
+                ]
+            })
+            
+            fig_dist = px.bar(
+                pred_df,
+                x='Tipo',
+                y=['No Default', 'Default'],
+                barmode='group',
+                title='Comparación: Real vs Predicho',
+                color_discrete_sequence=['#00d4ff', '#EF553B']
+            )
+            fig_dist.update_layout(
+                height=400,
+                xaxis_title="",
+                yaxis_title="Cantidad de Clientes"
+            )
+            st.plotly_chart(fig_dist, use_container_width=True)
+        
+        st.divider()
+        
+        # 3. Análisis de Probabilidades
+        st.markdown("#### 🎲 Distribución de Probabilidades de Default")
+        y_proba = rf_model.predict_proba(X_scaled)[:, 1]
+        
+        proba_df = pd.DataFrame({
+            'Probabilidad': y_proba,
+            'Clase_Real': df['default payment next month'].map({0: 'No Default', 1: 'Default'})
+        })
+        
+        fig_proba = px.histogram(
+            proba_df,
+            x='Probabilidad',
+            color='Clase_Real',
+            nbins=50,
+            title='Distribución de Probabilidades Predichas',
+            labels={'Probabilidad': 'Probabilidad de Default'},
+            color_discrete_map={'No Default': '#00d4ff', 'Default': '#EF553B'},
+            opacity=0.7
+        )
+        fig_proba.update_layout(
+            height=400,
+            xaxis_title="Probabilidad de Default",
+            yaxis_title="Cantidad de Clientes",
+            barmode='overlay'
+        )
+        st.plotly_chart(fig_proba, use_container_width=True)
+        
+        st.info("""
+        **Interpretación:**
+        - **Importancia de Variables:** Muestra qué características tienen más peso en la decisión del modelo
+        - **Matriz de Confusión:** Compara las predicciones del modelo con los valores reales
+        - **Distribución de Predicciones:** Visualiza cuántos clientes se predijeron correctamente
+        - **Probabilidades:** Muestra cómo el modelo asigna probabilidades a cada cliente
+        """)
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 📚 Información")
