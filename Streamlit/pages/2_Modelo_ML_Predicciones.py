@@ -12,6 +12,10 @@ import os
 import sys
 from pathlib import Path
 
+# Agregar esta línea para importar la conexión a MongoDB
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from db_connections import get_mongo_connection
+
 
 # 1. Agregar la carpeta raíz (Streamlit/) al path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -155,7 +159,7 @@ elif model_choice == "Random Forest (Clasificación)":
 # ==========================================
 # PESTAÑAS DE LA APLICACIÓN
 # ==========================================
-tab1, tab2, tab3 = st.tabs(["📊 Análisis del Modelo", "🔮 Predicción Individual", "📈 Visualización"])
+tab1, tab2, tab3, tab4 = st.tabs(["📊 Análisis del Modelo", "🔮 Predicción Individual", "📈 Visualización", "📊 Historial de Experimentos"])
 
 with tab1:
     if model_choice == "K-Means (Clustering)":
@@ -203,7 +207,7 @@ with tab1:
 
 with tab2:
     st.header("🔮 Predicción Individual")
-    st.info("💡 Ingresa solo las 6 variables más importantes. El sistema completará automáticamente el resto con los promedios del dataset para realizar la predicción.")
+    st.info("💡Solo las 6 variables más importantes. El sistema completará automáticamente el resto con los promedios del dataset para realizar la predicción.")
     
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -691,6 +695,126 @@ with tab3:
         - Monitorear continuamente el rendimiento del modelo y reentrenar periódicamente.
         - Combinar las predicciones del modelo con análisis cualitativo para decisiones finales.
         """)
+
+# ============================================================================
+# TAB 4: HISTORIAL DE EXPERIMENTOS EN MONGODB
+# ============================================================================
+with tab4:
+    st.header("📊 Historial de Experimentos de Machine Learning")
+    st.markdown(
+        "Esta sección muestra los experimentos registrados en MongoDB, incluyendo "
+        "métricas, hiperparámetros y fechas de ejecución de los modelos K-Means y Random Forest."
+    )
+    
+    try:
+        mongo_client = get_mongo_connection()
+        if mongo_client:
+            db = mongo_client['ML_Experiments']
+            collection = db['registro_experimentos']
+            
+            # Obtener todos los experimentos ordenados por fecha descendente
+            experimentos = list(collection.find().sort("fecha", -1))
+            
+            if experimentos:
+                # Estadísticas generales
+                col_stat1, col_stat2, col_stat3 = st.columns(3)
+                with col_stat1:
+                    st.metric("📊 Total Experimentos", len(experimentos))
+                with col_stat2:
+                    kmeans_count = sum(1 for exp in experimentos if exp.get("algoritmo") == "K-Means")
+                    st.metric("🔵 K-Means", kmeans_count)
+                with col_stat3:
+                    rf_count = sum(1 for exp in experimentos if exp.get("algoritmo") == "Random Forest")
+                    st.metric("🟢 Random Forest", rf_count)
+                
+                st.markdown("---")
+                
+                # Tabla resumen de experimentos
+                st.subheader("📋 Resumen de Experimentos")
+                datos_exp = []
+                for exp in experimentos:
+                    datos_exp.append({
+                        "Fecha": str(exp.get("fecha", "N/A"))[:19],
+                        "Algoritmo": exp.get("algoritmo", "N/A"),
+                        "Clusters/Estimadores": exp.get("hiperparametros", {}).get("n_clusters", 
+                                                        exp.get("hiperparametros", {}).get("n_estimators", "N/A")),
+                        "Silhouette/Accuracy": exp.get("metricas", {}).get("silhouette_score", 
+                                                   exp.get("metricas", {}).get("accuracy", "N/A")),
+                        "Inertia/F1": exp.get("metricas", {}).get("inertia", 
+                                         exp.get("metricas", {}).get("f1_score", "N/A")),
+                        "Registros": exp.get("metricas", {}).get("total_registros_procesados", "N/A")
+                    })
+                
+                df_exp = pd.DataFrame(datos_exp)
+                st.dataframe(df_exp, use_container_width=True, hide_index=True)
+                
+                st.markdown("---")
+                
+                # Filtro por algoritmo
+                st.subheader("🔍 Filtro por Algoritmo")
+                algoritmo_filtro = st.selectbox(
+                    "Selecciona el algoritmo",
+                    ["Todos", "K-Means", "Random Forest"],
+                    key="filtro_algoritmo"
+                )
+                
+                if algoritmo_filtro == "Todos":
+                    experimentos_filtrados = experimentos
+                else:
+                    experimentos_filtrados = [exp for exp in experimentos if exp.get("algoritmo") == algoritmo_filtro]
+                
+                st.info(f"📊 Mostrando {len(experimentos_filtrados)} experimentos")
+                
+                # Mostrar detalles de cada experimento
+                for i, exp in enumerate(experimentos_filtrados):
+                    with st.expander(f"🔬 Experimento {i+1}: {exp.get('algoritmo', 'N/A')} - {str(exp.get('fecha', 'N/A'))[:19]}"):
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.markdown("**📅 Información General**")
+                            st.write(f"**Fecha:** {exp.get('fecha', 'N/A')}")
+                            st.write(f"**Algoritmo:** {exp.get('algoritmo', 'N/A')}")
+                            st.write(f"**ID MongoDB:** {exp.get('_id', 'N/A')}")
+                        
+                        with col2:
+                            st.markdown("**⚙️ Hiperparámetros**")
+                            hiperparams = exp.get("hiperparametros", {})
+                            for key, value in hiperparams.items():
+                                st.write(f"**{key}:** {value}")
+                        
+                        st.markdown("**📊 Métricas del Modelo**")
+                        metricas = exp.get("metricas", {})
+                        col_m1, col_m2, col_m3 = st.columns(3)
+                        
+                        with col_m1:
+                            if "silhouette_score" in metricas:
+                                st.metric("Silhouette Score", f"{metricas['silhouette_score']:.4f}")
+                            if "accuracy" in metricas:
+                                st.metric("Accuracy", f"{metricas['accuracy']:.4f}")
+                        
+                        with col_m2:
+                            if "inertia" in metricas:
+                                st.metric("Inertia", f"{metricas['inertia']:.2f}")
+                            if "precision" in metricas:
+                                st.metric("Precision", f"{metricas['precision']:.4f}")
+                        
+                        with col_m3:
+                            if "total_registros_procesados" in metricas:
+                                st.metric("Registros", f"{metricas['total_registros_procesados']:,}")
+                            if "f1_score" in metricas:
+                                st.metric("F1-Score", f"{metricas['f1_score']:.4f}")
+                        
+                        # Mostrar JSON completo
+                        with st.expander("📄 Ver JSON completo del experimento"):
+                            st.json(exp)
+                
+                mongo_client.close()
+            else:
+                st.warning("⚠️ No hay experimentos registrados en MongoDB. Ejecuta los notebooks de entrenamiento para generar datos.")
+        else:
+            st.error("❌ No se pudo establecer conexión con MongoDB. Verifica que el contenedor esté corriendo.")
+    except Exception as e:
+        st.error(f"❌ Error al consultar MongoDB: {str(e)}")
 
 # Información del sistema en el sidebar
 st.sidebar.markdown("---")
