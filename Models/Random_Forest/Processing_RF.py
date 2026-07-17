@@ -8,10 +8,8 @@ def load_and_preprocess_data():
     Carga, limpia y preprocesa el dataset de clientes de tarjetas de crédito.
     Retorna los conjuntos de entrenamiento/prueba, el escalador entrenado y los nombres de features.
     """
-    # 1. Definir rutas relativas dinámicas
-    CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-    # Sube dos niveles (Random_Forest -> Models -> Raíz) y entra a Dataset
-    DATASET_PATH = os.path.join(CURRENT_DIR, '..', '..', 'Dataset', 'default of credit card clients.csv')
+    # 1. Definir ruta absoluta del dataset
+    DATASET_PATH = r"C:\Users\denni\Desktop\PROEYCTO\IF-Base-datos-Machine-learning\Dataset\default of credit card clients.csv"
     
     # 2. Cargar el dataset
     df = pd.read_csv(DATASET_PATH)
