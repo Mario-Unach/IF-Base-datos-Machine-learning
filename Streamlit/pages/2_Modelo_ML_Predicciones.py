@@ -2,13 +2,10 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
-<<<<<<< HEAD
 from pathlib import Path
 import sys
 import importlib
 import plotly.graph_objects as go
-=======
->>>>>>> origin/streamlit-pruebas
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -18,17 +15,14 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 import os
 import sys
 
-<<<<<<< HEAD
 # Agregar el directorio Streamlit al path para importar db_connections
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from db_connections import get_sql_connection, get_mongo_connection
 import auth as auth_module
 auth_module = importlib.reload(auth_module)
 from datetime import datetime
-=======
 # Agregar la ruta raíz al path para importar db_connections
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
->>>>>>> origin/streamlit-pruebas
 
 # Configuración de página
 st.set_page_config(
@@ -55,7 +49,6 @@ RF_SCALER_PATH = os.path.join(ROOT_DIR, "Models", "Random_Forest", "scaler.pkl")
 RF_FEATURES_PATH = os.path.join(ROOT_DIR, "Models", "Random_Forest", "feature_names.pkl")
 DATASET_PATH = os.path.join(ROOT_DIR, "Dataset", "default of credit card clients.csv")
 
-<<<<<<< HEAD
 auth_module.require_login()
 
 with st.sidebar:
@@ -85,9 +78,7 @@ if missing_files:
     st.stop()
 
 # Cargar modelo y preprocesadores
-=======
 # Cargar modelos con cache
->>>>>>> origin/streamlit-pruebas
 @st.cache_resource
 def load_kmeans_models():
     """Carga los modelos K-Means"""
