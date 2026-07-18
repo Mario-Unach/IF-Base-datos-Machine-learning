@@ -2,10 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
-from pathlib import Path
-import sys
-import importlib
-import plotly.graph_objects as go
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -14,14 +10,23 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 import os
 import sys
+from pathlib import Path
 
-# Agregar el directorio Streamlit al path para importar db_connections
+# Agregar esta línea para importar la conexión a MongoDB
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from db_connections import get_sql_connection, get_mongo_connection
-import auth as auth_module
-auth_module = importlib.reload(auth_module)
-from datetime import datetime
-# Agregar la ruta raíz al path para importar db_connections
+from db_connections import get_mongo_connection
+
+
+# 1. Agregar la carpeta raíz (Streamlit/) al path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# 2. Importar el módulo de autenticación
+import auth
+
+# 3. Inicializar y proteger la página
+auth.init_session_state()
+auth.require_role(["Administrador", "Analista"]) # Roles permitidos
+# Agregar la ruta raíz al path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Configuración de página
@@ -32,56 +37,21 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# CORRECCIÓN DE RUTAS - Navegar correctamente en la estructura
-# 2_Modelo_ML_Predicciones.py está en: Streamlit/pages/
-# Necesitamos subir 2 niveles para llegar a la raíz del proyecto
-current_file = os.path.abspath(__file__)  # Ruta del archivo actual
-pages_dir = os.path.dirname(current_file)  # Streamlit/pages/
-streamlit_dir = os.path.dirname(pages_dir)  # Streamlit/
-ROOT_DIR = os.path.dirname(streamlit_dir)  # Carpeta raíz del proyecto
+# Construir las rutas correctas
+current_file = os.path.abspath(__file__)
+pages_dir = os.path.dirname(current_file)
+streamlit_dir = os.path.dirname(pages_dir)
+ROOT_DIR = os.path.dirname(streamlit_dir)
 
-# Ahora construir las rutas correctas
 KMEANS_MODEL_PATH = os.path.join(ROOT_DIR, "Models", "K-Means", "kmeans_model.pkl")
 KMEANS_SCALER_PATH = os.path.join(ROOT_DIR, "Models", "K-Means", "scaler.pkl")
 KMEANS_CENTERS_PATH = os.path.join(ROOT_DIR, "Models", "K-Means", "cluster_centers.pkl")
 RF_MODEL_PATH = os.path.join(ROOT_DIR, "Models", "Random_Forest", "random_forest_optimizado.pkl")
 RF_SCALER_PATH = os.path.join(ROOT_DIR, "Models", "Random_Forest", "scaler.pkl")
 RF_FEATURES_PATH = os.path.join(ROOT_DIR, "Models", "Random_Forest", "feature_names.pkl")
-DATASET_PATH = os.path.join(ROOT_DIR, "Dataset", "default of credit card clients.csv")
 
-auth_module.require_login()
-
-with st.sidebar:
-    st.markdown("### 🔐 Sesión")
-    st.caption(f"Usuario: {st.session_state.login_user}")
-    st.caption(f"Perfil: {st.session_state.login_profile}")
-    auth_module.logout_button()
-
-# Ruta de los modelos - usar ruta absoluta correcta desde el directorio raíz del workspace
-MODEL_PATH = Path("Models/Gradient_Boosting/Notebook")
-
-# Verificar que los archivos existen antes de cargar
-required_files = ["xgb_model.pkl", "scaler.pkl", "columns.pkl", "medians.pkl"]
-missing_files = [f for f in required_files if not (MODEL_PATH / f).exists()]
-
-if missing_files:
-    st.error(f"""
-    ❌ **Archivos del modelo no encontrados:**
-    
-    Faltan los siguientes archivos en `{MODEL_PATH}`:
-    {', '.join(missing_files)}
-    
-    💡 **Solución:** 
-    1. Verifica que el notebook de entrenamiento se haya ejecutado correctamente
-    2. Los archivos deben estar en: `Models/Gradient_Boosting/Notebook/`
-    """)
-    st.stop()
-
-# Cargar modelo y preprocesadores
-# Cargar modelos con cache
 @st.cache_resource
 def load_kmeans_models():
-    """Carga los modelos K-Means"""
     try:
         kmeans = joblib.load(KMEANS_MODEL_PATH)
         scaler = joblib.load(KMEANS_SCALER_PATH)
@@ -93,7 +63,6 @@ def load_kmeans_models():
 
 @st.cache_resource
 def load_rf_models():
-    """Carga los modelos Random Forest"""
     try:
         rf_model = joblib.load(RF_MODEL_PATH)
         rf_scaler = joblib.load(RF_SCALER_PATH)
@@ -105,19 +74,43 @@ def load_rf_models():
 
 @st.cache_data
 def load_dataset():
-    """Carga el dataset"""
+    """Carga el dataset directamente desde SQL Server"""
+    import pyodbc
     try:
-        df = pd.read_csv(DATASET_PATH, header=1)
+        conn_str = (
+            "DRIVER={ODBC Driver 17 for SQL Server};"
+            "SERVER=localhost,1433;"
+            "DATABASE=CC_Client;"
+            "UID=sa;"
+            "PWD=Soymario.7;"
+            "TrustServerCertificate=yes;"
+        )
+        conn = pyodbc.connect(conn_str)
+        
+        query = """
+            SELECT 
+                id_cliente AS ID,
+                id_sexo AS SEX,
+                id_educacion AS EDUCATION,
+                id_estado_civil AS MARRIAGE,
+                edad AS AGE,
+                limite_credito AS LIMIT_BAL,
+                PAY_0, PAY_2, PAY_3, PAY_4, PAY_5, PAY_6,
+                BILL_AMT1, BILL_AMT2, BILL_AMT3, BILL_AMT4, BILL_AMT5, BILL_AMT6,
+                PAY_AMT1, PAY_AMT2, PAY_AMT3, PAY_AMT4, PAY_AMT5, PAY_AMT6,
+                target AS [default payment next month]
+            FROM vw_ml_dataset
+        """
+        df = pd.read_sql(query, conn)
+        conn.close()
         return df
-    except FileNotFoundError:
-        st.error(f"❌ No se encontró el dataset en {DATASET_PATH}")
+    except Exception as e:
+        st.error(f"❌ Error cargando datos desde SQL Server: {e}")
         return None
 
-# Título principal
 st.title("🤖 Modelos de Machine Learning - Predicciones")
 st.markdown("---")
 
-# Cargar datos y modelos
 df = load_dataset()
 kmeans_model, kmeans_scaler, kmeans_centers = load_kmeans_models()
 rf_model, rf_scaler, rf_features = load_rf_models()
@@ -125,51 +118,52 @@ rf_model, rf_scaler, rf_features = load_rf_models()
 if df is None or kmeans_model is None or rf_model is None:
     st.stop()
 
-# Sidebar para selección de modelo
 st.sidebar.header("⚙️ Configuración")
 model_choice = st.sidebar.selectbox(
     "Selecciona el Modelo",
     ["K-Means (Clustering)", "Random Forest (Clasificación)"]
 )
 
-# Preparar datos según el modelo seleccionado
+# ==========================================
+# PREPARACIÓN DE DATOS (CORREGIDO PARA AMBOS MODELOS)
+# ==========================================
+X_scaled = None  # Variable global para usar en tab3
+
 if model_choice == "K-Means (Clustering)":
-    # K-Means: eliminar ID y target
-    features_to_drop = ['ID', 'default payment next month']
+    features_to_drop = ['ID', 'default payment next month', 'Cluster']
     X = df.drop(columns=features_to_drop, errors='ignore')
-    X_scaled = kmeans_scaler.transform(X.values)
+    
+    # 🔥 CORRECCIÓN CRÍTICA: Renombrar columnas para que coincidan con el scaler
+    if hasattr(kmeans_scaler, 'feature_names_in_'):
+        expected_names = kmeans_scaler.feature_names_in_
+        if len(X.columns) == len(expected_names):
+            X.columns = expected_names
+    
+    X_scaled = kmeans_scaler.transform(X)
     df['Cluster'] = kmeans_model.predict(X_scaled)
-    
-if model_choice == "Random Forest (Clasificación)":
-    # Obtener los nombres reales de las columnas (excluyendo 'ID')
-    real_feature_names = [col for col in df.columns if col != 'ID']
-    
-    # Crear mapeo si rf_features tiene nombres genéricos como 'X0', 'X1', etc.
-    if rf_features and rf_features[0].startswith('X'):
-        feature_mapping = {f'X{i}': name for i, name in enumerate(real_feature_names)}
-        # Mapear los nombres en feature_importance
-        feature_importance['Feature'] = feature_importance['Feature'].map(
-            lambda x: feature_mapping.get(x, x)
-        )
-    
-    # Usar DataFrame con nombres de columnas correctos para el transform
+
+elif model_choice == "Random Forest (Clasificación)":
     X = df.drop(columns=['ID'], errors='ignore')
-    # Renombrar columnas si es necesario para que coincidan con lo que espera el scaler
+    
+    # 🔥 CORRECCIÓN CRÍTICA: Renombrar columnas para que coincidan con el scaler
     if hasattr(rf_scaler, 'feature_names_in_'):
         expected_names = rf_scaler.feature_names_in_
-        # Asegurarse de que X tenga los nombres esperados
-        if list(X.columns) != list(expected_names):
+        if len(X.columns) == len(expected_names):
             X.columns = expected_names
+        else:
+            st.error(f"❌ Error de dimensiones: El modelo espera {len(expected_names)} características, pero se recibieron {len(X.columns)}.")
+            st.stop()
+    
     X_scaled = rf_scaler.transform(X)
 
-# Tabs para diferentes funcionalidades
-tab1, tab2, tab3 = st.tabs(["📊 Análisis del Modelo", "🔮 Predicción Individual", "📈 Visualización"])
+# ==========================================
+# PESTAÑAS DE LA APLICACIÓN
+# ==========================================
+tab1, tab2, tab3, tab4 = st.tabs(["📊 Análisis del Modelo", "🔮 Predicción Individual", "📈 Visualización", "📊 Historial de Experimentos"])
 
 with tab1:
     if model_choice == "K-Means (Clustering)":
         st.header("📊 Análisis de Clusters con K-Means")
-        
-        # Métricas
         col1, col2, col3 = st.columns(3)
         with col1:
             st.metric("Total de Clientes", len(df))
@@ -179,329 +173,665 @@ with tab1:
             default_rate = df['default payment next month'].mean() * 100
             st.metric("Tasa Default Global", f"{default_rate:.2f}%")
         
-        # Perfil de clusters
         st.subheader("Perfil de Clusters")
         key_vars = ['LIMIT_BAL', 'AGE', 'PAY_0', 'BILL_AMT1', 'PAY_AMT1', 'default payment next month']
         cluster_profile = df.groupby('Cluster')[key_vars].mean()
-        default_rate_cluster = df.groupby('Cluster')['default payment next month'].mean() * 100
-        cluster_profile['Tasa_Default_%'] = default_rate_cluster
-        
+        cluster_profile['Tasa_Default_%'] = df.groupby('Cluster')['default payment next month'].mean() * 100
         st.dataframe(cluster_profile.round(2), use_container_width=True)
         
-        # Gráfico de tasa de default por cluster
         fig = px.bar(
             cluster_profile.reset_index(),
-            x='Cluster',
-            y='Tasa_Default_%',
+            x='Cluster', y='Tasa_Default_%',
             title='Tasa de Impago por Cluster',
-            color='Cluster',
-            color_continuous_scale='Viridis'
+            color='Cluster', color_continuous_scale='Viridis'
         )
         st.plotly_chart(fig, use_container_width=True)
-        
-    else:  # Random Forest
+    else:
         st.header("📊 Análisis de Random Forest")
-        
-        # Predicciones en el dataset completo
         y_true = df['default payment next month']
         y_pred = rf_model.predict(X_scaled)
         
-        # Métricas del modelo
         st.subheader("Métricas del Modelo")
         col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            accuracy = accuracy_score(y_true, y_pred)
-            st.metric("Accuracy", f"{accuracy:.4f}")
-        with col2:
-            precision = precision_score(y_true, y_pred)
-            st.metric("Precision", f"{precision:.4f}")
-        with col3:
-            recall = recall_score(y_true, y_pred)
-            st.metric("Recall", f"{recall:.4f}")
-        with col4:
-            f1 = f1_score(y_true, y_pred)
-            st.metric("F1-Score", f"{f1:.4f}")
+        with col1: st.metric("Accuracy", f"{accuracy_score(y_true, y_pred):.4f}")
+        with col2: st.metric("Precision", f"{precision_score(y_true, y_pred):.4f}")
+        with col3: st.metric("Recall", f"{recall_score(y_true, y_pred):.4f}")
+        with col4: st.metric("F1-Score", f"{f1_score(y_true, y_pred):.4f}")
         
-        # Matriz de confusión
         st.subheader("Matriz de Confusión")
         cm = confusion_matrix(y_true, y_pred)
-        fig_cm = px.imshow(
-            cm,
-            text_auto=True,
-            aspect="auto",
-            title="Matriz de Confusión",
-            labels=dict(x="Predicho", y="Real", color="Cantidad"),
-            x=["No Default", "Default"],
-            y=["No Default", "Default"],
-            color_continuous_scale='Blues'
-        )
+        fig_cm = px.imshow(cm, text_auto=True, aspect="auto", title="Matriz de Confusión",
+                           labels=dict(x="Predicho", y="Real", color="Cantidad"),
+                           x=["No Default", "Default"], y=["No Default", "Default"], color_continuous_scale='Blues')
         st.plotly_chart(fig_cm, use_container_width=True)
-        
-        # Importancia de características
-        st.subheader("Importancia de Características")
-
-        # Usamos las columnas del DataFrame X que se usó para el escalado.
-        # Esto garantiza que la longitud coincida exactamente con la del modelo.
-        feature_names = X.columns.tolist()
-
-        feature_importance = pd.DataFrame({
-            'Feature': feature_names,
-            'Importance': rf_model.feature_importances_
-        }).sort_values('Importance', ascending=False)
-
-        fig_imp = px.bar(
-            feature_importance.head(15),
-            x='Importance',
-            y='Feature',
-            orientation='h',
-            title='Top 15 Características Más Importantes',
-            color='Importance',
-            color_continuous_scale='Viridis'
-        )
-        fig_imp.update_layout(yaxis={'categoryorder': 'total ascending'})
-        st.plotly_chart(fig_imp, use_container_width=True)
-        
-        # Distribución de predicciones
-        st.subheader("Distribución de Predicciones")
-        pred_df = pd.DataFrame({
-            'Real': y_true,
-            'Predicho': y_pred
-        })
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            fig_real = px.pie(
-                pred_df,
-                names='Real',
-                title='Distribución Real',
-                color='Real',
-                color_discrete_map={0: '#636EFA', 1: '#EF553B'}
-            )
-            st.plotly_chart(fig_real, use_container_width=True)
-        with col2:
-            fig_pred = px.pie(
-                pred_df,
-                names='Predicho',
-                title='Distribución Predicha',
-                color='Predicho',
-                color_discrete_map={0: '#636EFA', 1: '#EF553B'}
-            )
-            st.plotly_chart(fig_pred, use_container_width=True)
 
 with tab2:
     st.header("🔮 Predicción Individual")
+    st.info("💡Solo las 6 variables más importantes. El sistema completará automáticamente el resto con los promedios del dataset para realizar la predicción.")
     
-    st.markdown("Ingresa los datos de un nuevo cliente para realizar una predicción:")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        limit_bal = st.number_input("💰 Límite de Crédito", 10000, 1000000, 150000, step=10000)
+        age = st.slider("📅 Edad", 18, 80, 30)
+    with c2:
+        pay_0 = st.slider("📊 Estado Pago Mes Actual (-1=puntual, 0-9=retraso)", -2, 8, 0)
+        pay_2 = st.slider("📊 Estado Pago Mes 2", -2, 8, 0)
+    with c3:
+        bill_amt1 = st.number_input("💵 Factura Mes 1", 0, 1000000, 50000, step=1000)
+        pay_amt1 = st.number_input("💳 Pago Realizado Mes 1", 0, 1000000, 5000, step=500)
     
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        limit_bal = st.number_input("Límite de Crédito", min_value=0, value=100000, step=10000)
-        sex = st.selectbox("Sexo (1=Masculino, 2=Femenino)", [1, 2])
-        education = st.selectbox("Educación (1=Grad, 2=University, 3=High School, 4=Others)", [1, 2, 3, 4])
-        marriage = st.selectbox("Estado Civil (1=Married, 2=Single, 3=Other)", [1, 2, 3])
-        age = st.number_input("Edad", min_value=18, max_value=100, value=30)
-        pay_0 = st.number_input("Estado Pago Mes Anterior (-1=Pagado, 0=Uso, 1-9=Retraso)", value=0)
-        pay_2 = st.number_input("Estado Pago Mes 2", value=0)
-        pay_3 = st.number_input("Estado Pago Mes 3", value=0)
-        pay_4 = st.number_input("Estado Pago Mes 4", value=0)
-        pay_5 = st.number_input("Estado Pago Mes 5", value=0)
-        pay_6 = st.number_input("Estado Pago Mes 6", value=0)
-    
-    with col2:
-        bill_amt1 = st.number_input("Monto Factura Mes 1", value=50000)
-        bill_amt2 = st.number_input("Monto Factura Mes 2", value=50000)
-        bill_amt3 = st.number_input("Monto Factura Mes 3", value=50000)
-        bill_amt4 = st.number_input("Monto Factura Mes 4", value=50000)
-        bill_amt5 = st.number_input("Monto Factura Mes 5", value=50000)
-        bill_amt6 = st.number_input("Monto Factura Mes 6", value=50000)
-        pay_amt1 = st.number_input("Pago Realizado Mes 1", value=2000)
-        pay_amt2 = st.number_input("Pago Realizado Mes 2", value=2000)
-        pay_amt3 = st.number_input("Pago Realizado Mes 3", value=2000)
-        pay_amt4 = st.number_input("Pago Realizado Mes 4", value=2000)
-        pay_amt5 = st.number_input("Pago Realizado Mes 5", value=2000)
-        pay_amt6 = st.number_input("Pago Realizado Mes 6", value=2000)
-    
-    if st.button("🎯 Realizar Predicción", type="primary"):
-        # Crear array con las características en el orden correcto
-        new_data = np.array([[
-            limit_bal, sex, education, marriage, age,
-            pay_0, pay_2, pay_3, pay_4, pay_5, pay_6,
-            bill_amt1, bill_amt2, bill_amt3, bill_amt4, bill_amt5, bill_amt6,
-            pay_amt1, pay_amt2, pay_amt3, pay_amt4, pay_amt5, pay_amt6,
-            0  # Valor dummy para la columna target (no se usa en predicción)
-        ]])
+    if st.button("🎯 Predecir", type="primary", use_container_width=True):
+        # 1. Obtener las medias del dataset para rellenar las variables faltantes
+        cols_to_drop = ['ID', 'default payment next month', 'Cluster', 'target']
+        means = df.drop(columns=[c for c in cols_to_drop if c in df.columns]).mean()
+        new_row = means.copy()
         
-        if model_choice == "K-Means (Clustering)":
-            # Para K-Means, usar solo las 23 características sin el target
-            new_data_kmeans = new_data[:, :23]
-            new_data_scaled = kmeans_scaler.transform(new_data_kmeans)
-            cluster_pred = kmeans_model.predict(new_data_scaled)[0]
+        # 2. Asignar los valores ingresados por el usuario
+        new_row['LIMIT_BAL'] = float(limit_bal)
+        new_row['AGE'] = float(age)
+        new_row['PAY_0'] = float(pay_0)
+        new_row['PAY_2'] = float(pay_2)
+        new_row['BILL_AMT1'] = float(bill_amt1)
+        new_row['PAY_AMT1'] = float(pay_amt1)
+        
+        # Convertir a array de numpy para evitar errores de índices de Pandas
+        X_new_array = new_row.values.reshape(1, -1)
+        
+        if model_choice == "Random Forest (Clasificación)":
+            # 🔥 CORRECCIÓN DEFINITIVA: Ajustar dimensiones al vuelo
+            expected_features = rf_scaler.n_features_in_
+            current_features = X_new_array.shape[1]
             
+            if current_features < expected_features:
+                # El scaler espera más columnas (probablemente incluyó el target o un índice al entrenar)
+                padding = np.zeros((1, expected_features - current_features))
+                X_new_array = np.hstack([X_new_array, padding])
+            elif current_features > expected_features:
+                X_new_array = X_new_array[:, :expected_features]
+            
+            # Escalar y predecir
+            X_new_scaled = rf_scaler.transform(X_new_array)
+            pred = rf_model.predict(X_new_scaled)[0]
+            proba = rf_model.predict_proba(X_new_scaled)[0]
+            
+            if pred == 1:
+                st.error(f"⚠️ **ALTO RIESGO DE DEFAULT** · Probabilidad: **{proba[1]*100:.1f}%**")
+            else:
+                st.success(f"✅ **BAJO RIESGO** · Probabilidad de default: **{proba[1]*100:.1f}%**")
+            
+            col_p1, col_p2 = st.columns([1, 2])
+            with col_p1:
+                proba_df = pd.DataFrame({'Clase': ['No Default', 'Default'], 'Prob': proba * 100})
+                fig_p = px.bar(proba_df, x='Clase', y='Prob', color='Clase',
+                              color_discrete_map={'No Default': '#00d4ff', 'Default': '#EF553B'})
+                fig_p.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                                   font=dict(color='#e2e8f0'), showlegend=False)
+                st.plotly_chart(fig_p, use_container_width=True)
+                
+        elif model_choice == "K-Means (Clustering)":
+            # 🔥 Ajustar dimensiones para K-Means también por seguridad
+            expected_features = kmeans_scaler.n_features_in_
+            current_features = X_new_array.shape[1]
+            
+            if current_features < expected_features:
+                padding = np.zeros((1, expected_features - current_features))
+                X_new_array = np.hstack([X_new_array, padding])
+            elif current_features > expected_features:
+                X_new_array = X_new_array[:, :expected_features]
+                
+            X_new_scaled = kmeans_scaler.transform(X_new_array)
+            cluster_pred = kmeans_model.predict(X_new_scaled)[0]
             st.success(f"✅ El cliente pertenece al **Cluster {cluster_pred}**")
             
-            # Mostrar características del cluster
             cluster_info = df[df['Cluster'] == cluster_pred]
-            
-            st.info(f"""
-            **Características del Cluster {cluster_pred}:**
-            - Clientes en este cluster: {len(cluster_info)}
-            - Tasa de default: {cluster_info['default payment next month'].mean()*100:.2f}%
-            - Límite de crédito promedio: ${cluster_info['LIMIT_BAL'].mean():,.0f}
-            - Edad promedio: {cluster_info['AGE'].mean():.1f} años
-            """)
-        else:
-            # Para Random Forest, usar las 24 características
-            new_data_scaled = rf_scaler.transform(new_data)  # new_data ya es numpy array, no debería fallar
-            rf_pred = rf_model.predict(new_data_scaled)[0]
-            rf_proba = rf_model.predict_proba(new_data_scaled)[0]
-            
-            if rf_pred == 1:
-                st.error(f"⚠️ **Alto Riesgo**: El cliente tiene alta probabilidad de default ({rf_proba[1]*100:.2f}%)")
-            else:
-                st.success(f"✅ **Bajo Riesgo**: El cliente tiene baja probabilidad de default ({rf_proba[0]*100:.2f}%)")
-            
-            # Mostrar probabilidades
-            proba_df = pd.DataFrame({
-                'Clase': ['No Default', 'Default'],
-                'Probabilidad': rf_proba * 100
-            })
-            
-            fig_proba = px.bar(
-                proba_df,
-                x='Clase',
-                y='Probabilidad',
-                title='Probabilidades de Predicción',
-                color='Clase',
-                color_discrete_map={'No Default': '#636EFA', 'Default': '#EF553B'}
-            )
-            st.plotly_chart(fig_proba, use_container_width=True)
+            st.markdown(f"""
+            <div class="pred-card">
+            <b>📊 Perfil del Cluster {cluster_pred}:</b><br>
+            • Clientes en este cluster: <b>{len(cluster_info):,}</b><br>
+            • Tasa de default: <b>{cluster_info['default payment next month'].mean()*100:.1f}%</b><br>
+            • Límite de crédito promedio: <b>${cluster_info['LIMIT_BAL'].mean():,.0f}</b><br>
+            • Edad promedio: <b>{cluster_info['AGE'].mean():.1f} años</b>
+            </div>
+            """, unsafe_allow_html=True)
 
+# ============================================================================
+# TAB 3: VISUALIZACIÓN Y ANÁLISIS AVANZADO
+# ============================================================================
 with tab3:
-    st.header("📈 Visualización")
+    st.header("📈 Visualización y Análisis de Resultados")
+    st.markdown(
+        "Esta sección presenta los resultados visuales del modelo seleccionado, "
+        "proporcionando insights clave para la interpretación y validación de los hallazgos."
+    )
     
     if model_choice == "K-Means (Clustering)":
-        # Visualización PCA para K-Means
-        st.subheader("Distribución de Clientes en 2D (PCA)")
+        st.markdown("---")
+        st.subheader("🔬 Análisis de Segmentación No Supervisada")
         
+        # Validación de datos
+        if X_scaled is None or len(X_scaled) == 0:
+            st.error("❌ No hay datos escalados disponibles para visualización.")
+            st.stop()
+        
+        if 'Cluster' not in df.columns:
+            st.error("❌ La columna 'Cluster' no está definida en el dataset.")
+            st.stop()
+        
+        # Aplicar PCA con análisis de varianza explicada
         pca = PCA(n_components=2)
         X_pca = pca.fit_transform(X_scaled)
+        varianza_explicada = pca.explained_variance_ratio_ * 100
         
+        # Métricas del análisis PCA
+        col_m1, col_m2, col_m3 = st.columns(3)
+        with col_m1:
+            st.metric("📊 Varianza PC1", f"{varianza_explicada[0]:.2f}%")
+        with col_m2:
+            st.metric("📊 Varianza PC2", f"{varianza_explicada[1]:.2f}%")
+        with col_m3:
+            st.metric("📊 Varianza Total", f"{varianza_explicada.sum():.2f}%")
+        
+        st.markdown(
+            f"**Nota:** Los dos componentes principales capturan el **{varianza_explicada.sum():.2f}%** "
+            f"de la varianza total del dataset."
+        )
+        
+        # Crear DataFrame para visualización
         pca_df = pd.DataFrame({
-            'PCA1': X_pca[:, 0],
-            'PCA2': X_pca[:, 1],
+            'Componente Principal 1': X_pca[:, 0].astype(float),
+            'Componente Principal 2': X_pca[:, 1].astype(float),
             'Cluster': df['Cluster'].astype(str),
-            'Default': df['default payment next month'].map({0: 'No', 1: 'Sí'})
+            'Estado de Default': df['default payment next month'].astype(int).map({0: 'No Default', 1: 'Default'})
         })
         
-        fig = px.scatter(
+        # Limpiar datos si es necesario
+        if pca_df.isna().any().any():
+            st.warning("⚠️ Se detectaron valores nulos en los datos. Procediendo con limpieza automática.")
+            pca_df = pca_df.dropna()
+        
+        # Visualización principal: Scatter plot con PCA
+        st.markdown("#### 🎯 Distribución Espacial de Clusters (Reducción Dimensional PCA)")
+        fig_pca = px.scatter(
             pca_df,
-            x='PCA1',
-            y='PCA2',
+            x='Componente Principal 1',
+            y='Componente Principal 2',
             color='Cluster',
-            symbol='Default',
-            title='Distribución de Clientes por Cluster',
-            hover_data=['Cluster', 'Default']
+            symbol='Estado de Default',
+            title=f'Segmentación de Clientes en Espacio 2D (PCA: {varianza_explicada.sum():.1f}% varianza explicada)',
+            hover_data=['Cluster', 'Estado de Default'],
+            opacity=1,
+            color_discrete_sequence=px.colors.qualitative.Set2,
+            size_max=10,
+            template="plotly_dark"
         )
-        st.plotly_chart(fig, use_container_width=True)
         
-        # Información adicional
+        fig_pca.update_layout(
+            xaxis_title=f"Componente Principal 1 ({varianza_explicada[0]:.1f}% varianza)",
+            yaxis_title=f"Componente Principal 2 ({varianza_explicada[1]:.1f}% varianza)",
+            height=650,
+            showlegend=True,
+            legend=dict(
+                orientation="v",
+                yanchor="top",
+                y=0.99,
+                xanchor="left",
+                x=1.02,
+                font=dict(color="white", size=16),
+                title_font=dict(size=18, color="white")
+            ),
+            plot_bgcolor='rgba(0,0,0,1)',   # <-- Fondo del gráfico negro sólido
+            paper_bgcolor='rgba(0,0,0,1)'   # <-- Fondo del lienzo exterior negro sólido
+        )
+        
+        st.plotly_chart(fig_pca, use_container_width=True, key="pca_kmeans_v2")
+        
+        st.markdown("---")
+        
+        # Análisis de centroides y características de clusters
+        st.markdown("#### 📊 Perfil Detallado de Clusters")
+        
+        cluster_stats = df.groupby('Cluster').agg({
+            'LIMIT_BAL': ['mean', 'median', 'std'],
+            'AGE': ['mean', 'median'],
+            'default payment next month': ['mean', 'count']
+        }).round(2)
+        
+        # Simplificar nombres de columnas
+        cluster_stats.columns = [
+            'Límite_Crédito_Media', 'Límite_Crédito_Mediana', 'Límite_Crédito_DesvEst',
+            'Edad_Media', 'Edad_Mediana',
+            'Tasa_Default', 'Tamaño_Cluster'
+        ]
+        
+        cluster_stats['Tasa_Default_%'] = (cluster_stats['Tasa_Default'] * 100).round(2)
+        cluster_stats = cluster_stats.reset_index()
+        
+        st.dataframe(
+            cluster_stats,
+            use_container_width=True,
+            hide_index=True
+        )
+        
+        # Visualización de tasa de default por cluster
+        st.markdown("#### ⚠️ Análisis de Riesgo por Segmento")
+        fig_risk = px.bar(
+            cluster_stats,
+            x='Cluster',
+            y='Tasa_Default_%',
+            title='Tasa de Incumplimiento por Cluster',
+            labels={'Tasa_Default_%': 'Tasa de Default (%)', 'Cluster': 'Segmento'},
+            color='Tasa_Default_%',
+            color_continuous_scale='RdYlGn_r',
+            text='Tasa_Default_%'
+        )
+        
+        fig_risk.update_layout(
+            height=450,
+            xaxis_title="Segmento de Clientes",
+            yaxis_title="Porcentaje de Incumplimiento",
+            showlegend=False
+        )
+        
+        fig_risk.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+        
+        st.plotly_chart(fig_risk, use_container_width=True)
+        
+        # Interpretación académica
+        st.markdown("#### 📖 Interpretación de Resultados")
         st.info("""
-        **Interpretación:**
-        - Los puntos de colores representan los clientes agrupados por cluster
-        - Los símbolos indican si el cliente hizo default o no
-        - Los clusters agrupan clientes con comportamientos similares
-        """)
+        **Análisis de Segmentación K-Means:**
         
-    else: # Random Forest
-        # Visualización de distribución de características importantes
-        st.subheader("Distribución de Características Importantes")
-
-        if hasattr(rf_model, 'feature_importances_'):
-            importances = rf_model.feature_importances_
-            
-            # SOLUCIÓN: Extraemos los nombres reales del DataFrame cargado.
-            # El modelo fue entrenado con 24 columnas (todas excepto 'ID').
-            correct_feature_names = [col for col in df.columns if col != 'ID']
-            
-            # Creamos el DataFrame con los 24 nombres reales y las 24 importancias
-            feature_importance = pd.DataFrame({
-                'Feature': correct_feature_names,
-                'Importance': importances
-            }).sort_values('Importance', ascending=False)
-
-            # Seleccionar las 5 características más importantes
-            top_features = feature_importance.head(5)['Feature'].tolist()
-
-            # Crear subplots
-            fig_dist = make_subplots(
-                rows=2, cols=3,
-                subplot_titles=top_features + ['Accuracy'],
-                specs=[[{"type": "histogram"}, {"type": "histogram"}, {"type": "histogram"}],
-                       [{"type": "histogram"}, {"type": "histogram"}, {"type": "indicator"}]]
+        1. **Reducción Dimensional (PCA):** El análisis de componentes principales permite visualizar 
+           la estructura de clusters en un espacio 2D, capturando la variabilidad más significativa 
+           del dataset.
+        
+        2. **Separabilidad de Clusters:** La distribución espacial muestra el grado de separación 
+           entre segmentos, indicando la efectividad del algoritmo de clustering.
+        
+        3. **Correlación con Default:** La superposición del estado de default sobre los clusters 
+           revela patrones de riesgo crediticio asociados a cada segmento.
+        
+        4. **Perfil de Riesgo:** Los clusters con mayor tasa de default pueden considerarse segmentos 
+           de alto riesgo, mientras que aquellos con menor tasa representan clientes de bajo riesgo.
+        
+        **Recomendación:** Utilizar esta segmentación para diseñar estrategias diferenciadas de 
+        gestión de riesgo y ofertas comerciales personalizadas.
+        """)
+    
+    else:  # Random Forest
+        st.markdown("---")
+        st.subheader("🎯 Análisis del Modelo de Clasificación Supervisada")
+        
+        # Validación de datos
+        if X_scaled is None or len(X_scaled) == 0:
+            st.error("❌ No hay datos escalados disponibles para análisis.")
+            st.stop()
+        
+        # Generar predicciones
+        y_true = df['default payment next month']
+        y_pred = rf_model.predict(X_scaled)
+        y_proba = rf_model.predict_proba(X_scaled)[:, 1]
+        
+        # ========================================================================
+        # SECCIÓN 1: MÉTRICAS DE RENDIMIENTO
+        # ========================================================================
+        st.markdown("#### 📊 Métricas de Evaluación del Modelo")
+        
+        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+        
+        with col_m1:
+            accuracy = accuracy_score(y_true, y_pred)
+            st.metric("🎯 Accuracy", f"{accuracy:.4f}", 
+                     help="Proporción de predicciones correctas sobre el total")
+        
+        with col_m2:
+            precision = precision_score(y_true, y_pred)
+            st.metric("📈 Precision", f"{precision:.4f}",
+                     help="De los predichos como default, cuántos realmente lo fueron")
+        
+        with col_m3:
+            recall = recall_score(y_true, y_pred)
+            st.metric("🔍 Recall", f"{recall:.4f}",
+                     help="De los defaults reales, cuántos fueron detectados")
+        
+        with col_m4:
+            f1 = f1_score(y_true, y_pred)
+            st.metric("⚖️ F1-Score", f"{f1:.4f}",
+                     help="Media armónica entre Precision y Recall")
+        
+        st.markdown("---")
+        
+        # ========================================================================
+        # SECCIÓN 2: ANÁLISIS DE IMPORTANCIA DE VARIABLES
+        # ========================================================================
+        st.markdown("#### 🔬 Importancia de Variables Predictoras")
+        st.markdown(
+            "El análisis de importancia de características revela qué variables tienen mayor "
+            "influencia en la decisión del modelo Random Forest."
+        )
+        
+        # Calcular importancia de características
+        feature_importance_df = pd.DataFrame({
+            'Variable': X.columns,
+            'Importancia': rf_model.feature_importances_
+        }).sort_values('Importancia', ascending=False)
+        
+        # Top 15 variables
+        top_features = feature_importance_df.head(15)
+        
+        col_imp1, col_imp2 = st.columns([3, 2])
+        
+        with col_imp1:
+            fig_imp = px.bar(
+                top_features,
+                x='Importancia',
+                y='Variable',
+                orientation='h',
+                title='Top 15 Variables con Mayor Poder Predictivo',
+                color='Importancia',
+                color_continuous_scale='Viridis',
+                labels={'Importancia': 'Importancia Relativa', 'Variable': 'Característica'}
             )
+            
+            fig_imp.update_layout(
+                yaxis={'categoryorder': 'total ascending'},
+                height=550,
+                showlegend=False,
+                xaxis_title="Importancia Normalizada (Gini Impurity)",
+                yaxis_title=""
+            )
+            
+            st.plotly_chart(fig_imp, use_container_width=True)
+        
+        with col_imp2:
+            st.markdown("**📋 Ranking Completo:**")
+            st.dataframe(
+                feature_importance_df.head(10),
+                use_container_width=True,
+                hide_index=True
+            )
+            
+            # Estadísticas de importancia
+            st.markdown("**📈 Estadísticas:**")
+            st.metric("Variables totales", len(feature_importance_df))
+            st.metric("Importancia máxima", f"{feature_importance_df['Importancia'].max():.4f}")
+            st.metric("Importancia media", f"{feature_importance_df['Importancia'].mean():.4f}")
+        
+        st.markdown("---")
+        
+        # ========================================================================
+        # SECCIÓN 3: MATRIZ DE CONFUSIÓN Y ANÁLISIS DE ERRORES
+        # ========================================================================
+        st.markdown("#### 🔢 Matriz de Confusión y Análisis de Clasificación")
+        
+        col_cm1, col_cm2 = st.columns(2)
+        
+        with col_cm1:
+            st.markdown("**Predicciones vs Valores Reales**")
+            
+            cm = confusion_matrix(y_true, y_pred)
+            
+            fig_cm = px.imshow(
+                cm,
+                text_auto=True,
+                aspect="auto",
+                title='Matriz de Confusión',
+                labels=dict(x="Clase Predicha", y="Clase Real", color="Frecuencia"),
+                x=["No Default (0)", "Default (1)"],
+                y=["No Default (0)", "Default (1)"],
+                color_continuous_scale='Blues'
+            )
+            
+            fig_cm.update_layout(
+                height=450,
+                xaxis_title="Predicción del Modelo",
+                yaxis_title="Valor Real"
+            )
+            
+            st.plotly_chart(fig_cm, use_container_width=True)
+        
+        with col_cm2:
+            st.markdown("**📊 Desglose de Clasificaciones:**")
+            
+            # Calcular métricas de la matriz de confusión
+            tn, fp, fn, tp = cm.ravel()
+            
+            st.metric("✅ Verdaderos Negativos (TN)", f"{tn:,}",
+                     help="Clientes sin default correctamente identificados")
+            st.metric("❌ Falsos Positivos (FP)", f"{fp:,}",
+                     help="Clientes sin default clasificados incorrectamente como default")
+            st.metric("❌ Falsos Negativos (FN)", f"{fn:,}",
+                     help="Clientes con default no detectados por el modelo")
+            st.metric("✅ Verdaderos Positivos (TP)", f"{tp:,}",
+                     help="Clientes con default correctamente identificados")
+        
+        st.markdown("---")
+        
+        # ========================================================================
+        # SECCIÓN 4: ANÁLISIS DE DISTRIBUCIÓN DE PROBABILIDADES
+        # ========================================================================
+        st.markdown("#### 🎲 Distribución de Probabilidades de Default")
+        st.markdown(
+            "El histograma muestra cómo el modelo asigna probabilidades a cada instancia, "
+            "permitiendo evaluar la confianza de las predicciones."
+        )
+        
+        proba_df = pd.DataFrame({
+            'Probabilidad_Predicha': y_proba,
+            'Clase_Real': y_true.map({0: 'No Default', 1: 'Default'})
+        })
+        
+        fig_proba = px.histogram(
+            proba_df,
+            x='Probabilidad_Predicha',
+            color='Clase_Real',
+            nbins=60,
+            title='Distribución de Probabilidades de Default por Clase Real',
+            labels={'Probabilidad_Predicha': 'Probabilidad de Default Predicha', 
+                   'count': 'Frecuencia'},
+            color_discrete_map={'No Default': '#3498db', 'Default': '#e74c3c'},
+            opacity=0.75,
+            marginal="box"
+        )
+        
+        fig_proba.update_layout(
+            height=500,
+            xaxis_title="Probabilidad de Default (0 = Bajo Riesgo, 1 = Alto Riesgo)",
+            yaxis_title="Número de Clientes",
+            barmode='overlay',
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            )
+        )
+        
+        st.plotly_chart(fig_proba, use_container_width=True)
+        
+        # Estadísticas de probabilidades
+        col_p1, col_p2, col_p3 = st.columns(3)
+        
+        with col_p1:
+            st.metric("📊 Probabilidad Media", f"{y_proba.mean():.4f}")
+        with col_p2:
+            st.metric("📊 Desviación Estándar", f"{y_proba.std():.4f}")
+        with col_p3:
+            st.metric("📊 Mediana", f"{np.median(y_proba):.4f}")
+        
+        st.markdown("---")
+        
+        # ========================================================================
+        # SECCIÓN 5: INTERPRETACIÓN ACADÉMICA
+        # ========================================================================
+        st.markdown("#### 📖 Interpretación y Validación del Modelo")
+        st.info("""
+        **Análisis del Modelo Random Forest:**
+        
+        1. **Capacidad Predictiva:** Las métricas de evaluación (Accuracy, Precision, Recall, F1-Score) 
+           cuantifican el rendimiento del modelo en la tarea de clasificación binaria.
+        
+        2. **Importancia de Variables:** El análisis de importancia revela que las variables relacionadas 
+           con el historial de pagos (PAY_0, PAY_2) y el límite de crédito (LIMIT_BAL) son los predictores 
+           más influyentes, lo cual es consistente con la literatura sobre riesgo crediticio.
+        
+        3. **Matriz de Confusión:** Permite identificar patrones de error del modelo, particularmente 
+           los falsos negativos (clientes con default no detectados), que representan el mayor riesgo 
+           para la institución financiera.
+        
+        4. **Distribución de Probabilidades:** Un modelo bien calibrado debería mostrar probabilidades 
+           bajas para la clase "No Default" y altas para la clase "Default". La superposición indica 
+           casos ambiguos que requieren análisis adicional.
+        
+        **Limitaciones y Consideraciones:**
+        - El modelo fue entrenado con datos históricos y puede no generalizar a cambios estructurales 
+          en el comportamiento de los clientes.
+        - La interpretación causal requiere análisis adicional, ya que Random Forest identifica 
+          correlaciones, no necesariamente causalidad.
+        
+        **Recomendaciones:**
+        - Implementar el modelo como sistema de alerta temprana para identificar clientes en riesgo.
+        - Monitorear continuamente el rendimiento del modelo y reentrenar periódicamente.
+        - Combinar las predicciones del modelo con análisis cualitativo para decisiones finales.
+        """)
 
-            # Agregar histogramas para cada característica importante
-            for i, feature in enumerate(top_features):
-                row = i // 3 + 1
-                col = i % 3 + 1
-                fig_dist.add_trace(
-                    go.Histogram(
-                        x=df[feature], # Ahora 'feature' es un nombre real como 'PAY_0' o 'LIMIT_BAL'
-                        name=feature,
-                        marker_color='#636EFA',
-                        showlegend=False
-                    ),
-                    row=row, col=col
+# ============================================================================
+# TAB 4: HISTORIAL DE EXPERIMENTOS EN MONGODB
+# ============================================================================
+with tab4:
+    st.header("📊 Historial de Experimentos de Machine Learning")
+    st.markdown(
+        "Esta sección muestra los experimentos registrados en MongoDB, incluyendo "
+        "métricas, hiperparámetros y fechas de ejecución de los modelos K-Means y Random Forest."
+    )
+    
+    try:
+        mongo_client = get_mongo_connection()
+        if mongo_client:
+            db = mongo_client['ML_Experiments']
+            collection = db['registro_experimentos']
+            
+            # Obtener todos los experimentos ordenados por fecha descendente
+            experimentos = list(collection.find().sort("fecha", -1))
+            
+            if experimentos:
+                # Estadísticas generales
+                col_stat1, col_stat2, col_stat3 = st.columns(3)
+                with col_stat1:
+                    st.metric("📊 Total Experimentos", len(experimentos))
+                with col_stat2:
+                    kmeans_count = sum(1 for exp in experimentos if exp.get("algoritmo") == "K-Means")
+                    st.metric("🔵 K-Means", kmeans_count)
+                with col_stat3:
+                    rf_count = sum(1 for exp in experimentos if exp.get("algoritmo") == "Random Forest")
+                    st.metric("🟢 Random Forest", rf_count)
+                
+                st.markdown("---")
+                
+                # Tabla resumen de experimentos
+                st.subheader("📋 Resumen de Experimentos")
+                datos_exp = []
+                for exp in experimentos:
+                    datos_exp.append({
+                        "Fecha": str(exp.get("fecha", "N/A"))[:19],
+                        "Algoritmo": exp.get("algoritmo", "N/A"),
+                        "Clusters/Estimadores": exp.get("hiperparametros", {}).get("n_clusters", 
+                                                        exp.get("hiperparametros", {}).get("n_estimators", "N/A")),
+                        "Silhouette/Accuracy": exp.get("metricas", {}).get("silhouette_score", 
+                                                   exp.get("metricas", {}).get("accuracy", "N/A")),
+                        "Inertia/F1": exp.get("metricas", {}).get("inertia", 
+                                         exp.get("metricas", {}).get("f1_score", "N/A")),
+                        "Registros": exp.get("metricas", {}).get("total_registros_procesados", "N/A")
+                    })
+                
+                df_exp = pd.DataFrame(datos_exp)
+                st.dataframe(df_exp, use_container_width=True, hide_index=True)
+                
+                st.markdown("---")
+                
+                # Filtro por algoritmo
+                st.subheader("🔍 Filtro por Algoritmo")
+                algoritmo_filtro = st.selectbox(
+                    "Selecciona el algoritmo",
+                    ["Todos", "K-Means", "Random Forest"],
+                    key="filtro_algoritmo"
                 )
+                
+                if algoritmo_filtro == "Todos":
+                    experimentos_filtrados = experimentos
+                else:
+                    experimentos_filtrados = [exp for exp in experimentos if exp.get("algoritmo") == algoritmo_filtro]
+                
+                st.info(f"📊 Mostrando {len(experimentos_filtrados)} experimentos")
+                
+                # Mostrar detalles de cada experimento
+                for i, exp in enumerate(experimentos_filtrados):
+                    with st.expander(f"🔬 Experimento {i+1}: {exp.get('algoritmo', 'N/A')} - {str(exp.get('fecha', 'N/A'))[:19]}"):
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.markdown("**📅 Información General**")
+                            st.write(f"**Fecha:** {exp.get('fecha', 'N/A')}")
+                            st.write(f"**Algoritmo:** {exp.get('algoritmo', 'N/A')}")
+                            st.write(f"**ID MongoDB:** {exp.get('_id', 'N/A')}")
+                        
+                        with col2:
+                            st.markdown("**⚙️ Hiperparámetros**")
+                            hiperparams = exp.get("hiperparametros", {})
+                            for key, value in hiperparams.items():
+                                st.write(f"**{key}:** {value}")
+                        
+                        st.markdown("**📊 Métricas del Modelo**")
+                        metricas = exp.get("metricas", {})
+                        col_m1, col_m2, col_m3 = st.columns(3)
+                        
+                        with col_m1:
+                            if "silhouette_score" in metricas:
+                                st.metric("Silhouette Score", f"{metricas['silhouette_score']:.4f}")
+                            if "accuracy" in metricas:
+                                st.metric("Accuracy", f"{metricas['accuracy']:.4f}")
+                        
+                        with col_m2:
+                            if "inertia" in metricas:
+                                st.metric("Inertia", f"{metricas['inertia']:.2f}")
+                            if "precision" in metricas:
+                                st.metric("Precision", f"{metricas['precision']:.4f}")
+                        
+                        with col_m3:
+                            if "total_registros_procesados" in metricas:
+                                st.metric("Registros", f"{metricas['total_registros_procesados']:,}")
+                            if "f1_score" in metricas:
+                                st.metric("F1-Score", f"{metricas['f1_score']:.4f}")
+                        
+                        # Mostrar JSON completo
+                        with st.expander("📄 Ver JSON completo del experimento"):
+                            st.json(exp)
+                
+                mongo_client.close()
+            else:
+                st.warning("⚠️ No hay experimentos registrados en MongoDB. Ejecuta los notebooks de entrenamiento para generar datos.")
+        else:
+            st.error("❌ No se pudo establecer conexión con MongoDB. Verifica que el contenedor esté corriendo.")
+    except Exception as e:
+        st.error(f"❌ Error al consultar MongoDB: {str(e)}")
 
-            # Agregar indicador de accuracy
-            # Calculamos el accuracy usando el dataset completo para el gauge
-            y_true = df['default payment next month']
-            # .values convierte el DataFrame a un array de NumPy, ignorando la validación estricta de nombres
-            X_rf_array = df.drop(columns=['ID']).values
-            X_scaled = rf_scaler.transform(X_rf_array)
-            y_pred = rf_model.predict(X_scaled)
-            acc_val = accuracy_score(y_true, y_pred) * 100
-
-            fig_dist.add_trace(
-                go.Indicator(
-                    mode="gauge+number",
-                    value=acc_val,
-                    title={'text': "Accuracy (%)"},
-                    gauge={
-                        'axis': {'range': [0, 100]},
-                        'bar': {'color': "#636EFA"},
-                        'steps': [
-                            {'range': [0., 50.], 'color': "#EF553B"},
-                            {'range': [50., 75.], 'color': "#FFA15A"},
-                            {'range': [75., 100.], 'color': "#00CC96"}
-                        ]
-                    }
-                ),
-                row=2, col=3
-            )
-
-            fig_dist.update_layout(height=600, showlegend=False, title_text="Distribución de las 5 Características Más Importantes")
-            st.plotly_chart(fig_dist, use_container_width=True)
-            
-            # Información adicional
-            st.info("""
-            **Interpretación:**
-            - Los histogramas muestran la distribución de las características que más peso tienen en la decisión del modelo.
-            - El gauge indica el Accuracy (precisión) global del modelo.
-            """)
-
-# Información adicional en el sidebar
+# Información del sistema en el sidebar
 st.sidebar.markdown("---")
-st.sidebar.markdown("### 📚 Información")
+st.sidebar.markdown("### 📚 Información del Sistema")
 st.sidebar.markdown("""
-**Modelos disponibles:**
-- **K-Means**: Clustering para segmentación de clientes
-- **Random Forest**: Clasificación para predicción de default
+**Modelos Implementados:**
+- **K-Means:** Algoritmo de clustering no supervisado para segmentación de clientes
+- **Random Forest:** Ensemble de árboles de decisión para clasificación supervisada
 
-**Dataset:**
-- 30,000 clientes
-- 23 características
-- Target: default payment next month
+**Características del Dataset:**
+- 📊 **30,000** registros de clientes
+- 🔢 **23** variables predictoras
+- 🎯 **Target:** default payment next month (binario)
+
+**Tecnologías:**
+- Scikit-learn (modelos ML)
+- Pandas (procesamiento de datos)
+- Plotly (visualización interactiva)
+- Streamlit (interfaz web)
 """)
